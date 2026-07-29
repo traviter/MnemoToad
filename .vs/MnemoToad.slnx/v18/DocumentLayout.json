@@ -3,8 +3,8 @@
   "WorkspaceRootPath": "C:\\Users\\travi\\source\\repos\\MnemoToad\\",
   "Documents": [
     {
-      "AbsoluteMoniker": "D:0:0:{160E55B0-7057-4013-BE20-DF09A641EF6F}|MnemoToad.Api\\MnemoToad.Api.csproj|c:\\users\\travi\\source\\repos\\mnemotoad\\mnemotoad.api\\program.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
-      "RelativeMoniker": "D:0:0:{160E55B0-7057-4013-BE20-DF09A641EF6F}|MnemoToad.Api\\MnemoToad.Api.csproj|solutionrelative:mnemotoad.api\\program.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+      "AbsoluteMoniker": "D:0:0:{4625D316-7141-D6FA-035D-76DF91226822}|MnemoToad.Api\\MnemoToad.Api.csproj|c:\\users\\travi\\source\\repos\\mnemotoad\\mnemotoad.api\\program.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{4625D316-7141-D6FA-035D-76DF91226822}|MnemoToad.Api\\MnemoToad.Api.csproj|solutionrelative:mnemotoad.api\\program.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     }
   ],
   "DocumentGroupContainers": [
@@ -14,8 +14,12 @@
       "DocumentGroups": [
         {
           "DockedWidth": 200,
-          "SelectedChildIndex": 1,
+          "SelectedChildIndex": 2,
           "Children": [
+            {
+              "$type": "Bookmark",
+              "Name": "ST:0:0:{3ae79031-e1bc-11d0-8f78-00a0c9110057}"
+            },
             {
               "$type": "Bookmark",
               "Name": "ST:0:0:{aa2115a1-9712-457b-9047-dbb71ca2cdd2}"
@@ -28,22 +32,10 @@
               "RelativeDocumentMoniker": "MnemoToad.Api\\Program.cs",
               "ToolTip": "C:\\Users\\travi\\source\\repos\\MnemoToad\\MnemoToad.Api\\Program.cs",
               "RelativeToolTip": "MnemoToad.Api\\Program.cs",
-              "ViewState": "AgIAAAIAAAAAAAAAAAAuwBEAAAAAAAAAAAAAAA==",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAABEAAAAAAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
               "WhenOpened": "2026-07-29T19:05:48.274Z",
               "EditorCaption": ""
-            },
-            {
-              "$type": "Bookmark",
-              "Name": "ST:0:0:{c6f34f0d-7ae5-4f3a-be61-fe0c21ae9eb8}"
-            },
-            {
-              "$type": "Bookmark",
-              "Name": "ST:0:0:{cce594b6-0c39-4442-ba28-10c64ac7e89f}"
-            },
-            {
-              "$type": "Bookmark",
-              "Name": "ST:0:0:{3ae79031-e1bc-11d0-8f78-00a0c9110057}"
             }
           ]
         }
