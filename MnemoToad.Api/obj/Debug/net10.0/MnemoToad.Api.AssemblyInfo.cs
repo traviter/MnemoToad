@@ -14,7 +14,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("MnemoToad.Api")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+fc402982f538a95f08fd68758ee8022f03e1b86f")]
 [assembly: System.Reflection.AssemblyProductAttribute("MnemoToad.Api")]
 [assembly: System.Reflection.AssemblyTitleAttribute("MnemoToad.Api")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
