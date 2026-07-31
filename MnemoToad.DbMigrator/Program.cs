@@ -16,9 +16,11 @@ var connectionString = args.Length > 0
           "No connection string found. Provide it as a CLI argument, set DB_CONNECTION_STRING, " +
           "or add ConnectionStrings:Default to appsettings.Development.json.");
 
+var scriptsPath = Path.Combine(AppContext.BaseDirectory, "Scripts");
+
 var upgrader = DeployChanges.To
     .PostgresqlDatabase(connectionString)
-    .WithScriptsFromFileSystem("Scripts")
+    .WithScriptsFromFileSystem(scriptsPath)
     .LogToConsole()
     .Build();
 
