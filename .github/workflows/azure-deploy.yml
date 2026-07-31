@@ -9,6 +9,7 @@ on:
 env:
   AZURE_WEBAPP_NAME: Mnemotoad
   DOTNET_VERSION: '10.0.x'
+  API_PROJECT: MnemoToad.Api/MnemoToad.Api.csproj
 
 jobs:
   build:
@@ -24,13 +25,13 @@ jobs:
           dotnet-version: ${{ env.DOTNET_VERSION }}
 
       - name: Restore dependencies
-        run: dotnet restore
+        run: dotnet restore ${{ env.API_PROJECT }}
 
       - name: Build
-        run: dotnet build --configuration Release --no-restore
+        run: dotnet build ${{ env.API_PROJECT }} --configuration Release --no-restore
 
       - name: Publish
-        run: dotnet publish -c Release -o ${{ github.workspace }}/publish
+        run: dotnet publish ${{ env.API_PROJECT }} -c Release -o ${{ github.workspace }}/publish
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
