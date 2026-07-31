@@ -3,6 +3,7 @@ using Microsoft.Extensions.Configuration;
 using System.Runtime.CompilerServices;
 
 var configuration = new ConfigurationBuilder()
+    .SetBasePath(AppContext.BaseDirectory)
     .AddJsonFile("appsettings.Development.json", optional: true)
     .Build();
 
