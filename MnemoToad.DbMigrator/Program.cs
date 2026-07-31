@@ -13,7 +13,7 @@ var connectionString = args.Length > 0
     : Environment.GetEnvironmentVariable("DB_ADMIN_CONNECTION_STRING")
       ?? configuration.GetConnectionString("Default")
       ?? throw new ArgumentException(
-          "No connection string found. Provide it as a CLI argument, set DB_CONNECTION_STRING, " +
+          "No connection string found. Provide it as a CLI argument, set DB_ADMIN_CONNECTION_STRING, " +
           "or add ConnectionStrings:Default to appsettings.Development.json.");
 
 var scriptsPath = Path.Combine(AppContext.BaseDirectory, "Scripts");

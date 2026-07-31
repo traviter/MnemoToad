@@ -7,7 +7,7 @@ on:
       - 'MnemoToad.DbMigrator/**'
   workflow_call:
     secrets:
-      DB_CONNECTION_STRING:
+      DB_ADMIN_CONNECTION_STRING:
         required: true
   workflow_dispatch:
 
@@ -25,5 +25,5 @@ jobs:
 
       - name: Run DbUp migrator
         env:
-          DB_CONNECTION_STRING: ${{ secrets.DB_CONNECTION_STRING }}
+          DB_ADMIN_CONNECTION_STRING: ${{ secrets.DB_ADMIN_CONNECTION_STRING }}
         run: dotnet run --project MnemoToad.DbMigrator
