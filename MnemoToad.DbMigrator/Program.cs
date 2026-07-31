@@ -7,10 +7,10 @@ var configuration = new ConfigurationBuilder()
     .AddJsonFile("appsettings.Development.json", optional: true)
     .Build();
 
-// Priority: explicit CLI arg > DB_CONNECTION_STRING env var (CI/Azure) > appsettings.Development.json (local)
+// Priority: explicit CLI arg > DB_ADMIN_CONNECTION_STRING env var (CI/Azure) > appsettings.Development.json (local)
 var connectionString = args.Length > 0
     ? args[0]
-    : Environment.GetEnvironmentVariable("DB_CONNECTION_STRING")
+    : Environment.GetEnvironmentVariable("DB_ADMIN_CONNECTION_STRING")
       ?? configuration.GetConnectionString("Default")
       ?? throw new ArgumentException(
           "No connection string found. Provide it as a CLI argument, set DB_CONNECTION_STRING, " +
