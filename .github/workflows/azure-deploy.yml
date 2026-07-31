@@ -30,6 +30,9 @@ jobs:
       - name: Build
         run: dotnet build ${{ env.API_PROJECT }} --configuration Release --no-restore
 
+      - name: Clean publish folder
+        run: rm -rf ${{ github.workspace }}/publish
+
       - name: Publish
         run: dotnet publish ${{ env.API_PROJECT }} -c Release -o ${{ github.workspace }}/publish
 
