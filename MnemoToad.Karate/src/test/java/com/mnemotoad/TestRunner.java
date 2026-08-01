@@ -4,7 +4,6 @@ import com.intuit.karate.Runner;
 import com.intuit.karate.Results;
 import org.junit.jupiter.api.Test;
 
-import java.util.Arrays;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -19,8 +18,9 @@ class TestRunner {
                 .outputCucumberJson(true);
 
         if (tagsProperty != null && !tagsProperty.isBlank()) {
-            List<String> tags = Arrays.asList(tagsProperty.split(","));
-            builder = builder.tags(tags);
+            // A single expression string, not one-element-per-tag: Karate itself treats commas
+            // within an expression as OR, and separate list elements as AND.
+            builder = builder.tags(List.of(tagsProperty));
         }
 
         Results results = builder.parallel(5);
