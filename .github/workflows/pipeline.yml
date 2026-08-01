@@ -33,22 +33,26 @@ jobs:
             karate:
               - 'MnemoToad.Karate/**'
 
-  # TODO: once MnemoToad.Tests exists, add a unit-tests job here (needs: build, gates migrate)
-  # so the order becomes build -> unit tests -> data conversion -> deploy, matching the intended
-  # pipeline shape. Right now build -> data conversion -> deploy is functionally equivalent since
-  # build doesn't touch the database, but that gap disappears once there's something to test.
-
   build:
     needs: changes
     if: needs.changes.outputs.api == 'true'
     uses: ./.github/workflows/build-api.yml
 
-  migrate:
+  unit-tests:
     needs: [changes, build]
     if: |
       always() && !cancelled() &&
+      needs.changes.outputs.api == 'true' &&
+      needs.build.result == 'success'
+    uses: ./.github/workflows/unit-tests.yml
+
+  migrate:
+    needs: [changes, build, unit-tests]
+    if: |
+      always() && !cancelled() &&
       (needs.changes.outputs.api == 'true' || needs.changes.outputs.data == 'true') &&
-      (needs.build.result == 'success' || needs.build.result == 'skipped')
+      (needs.build.result == 'success' || needs.build.result == 'skipped') &&
+      (needs['unit-tests'].result == 'success' || needs['unit-tests'].result == 'skipped')
     uses: ./.github/workflows/db-deploy.yml
     secrets: inherit
 
@@ -72,11 +76,12 @@ jobs:
     secrets: inherit
 
   karate:
-    needs: [changes, build, migrate, deploy, restart-api]
+    needs: [changes, build, unit-tests, migrate, deploy, restart-api]
     if: |
       always() && !cancelled() &&
       (needs.changes.outputs.api == 'true' || needs.changes.outputs.data == 'true' || needs.changes.outputs.karate == 'true') &&
       needs.build.result != 'failure' &&
+      needs['unit-tests'].result != 'failure' &&
       needs.migrate.result != 'failure' &&
       needs.deploy.result != 'failure' &&
       needs['restart-api'].result != 'failure'
