@@ -1,7 +1,7 @@
-﻿using Microsoft.EntityFrameworkCore;
-using MnemoToad.Api.Models;
+using Microsoft.EntityFrameworkCore;
+using MnemoToad.Data.Entities;
 
-namespace MnemoToad.Api.Data
+namespace MnemoToad.Data
 {
 
     public class AppDbContext : DbContext

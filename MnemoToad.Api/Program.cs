@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
-using MnemoToad.Api.Data;
-using MnemoToad.Api.Models;
+using MnemoToad.Api.Services;
+using MnemoToad.Data;
+using MnemoToad.Data.Entities;
 using System.ComponentModel.DataAnnotations;
 
 var builder = WebApplication.CreateBuilder(args);

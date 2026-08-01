@@ -1,8 +1,9 @@
-﻿using global::MnemoToad.Api.Models;
 using Microsoft.EntityFrameworkCore;
+using MnemoToad.Data;
+using MnemoToad.Data.Entities;
 using System.ComponentModel.DataAnnotations;
 
-namespace MnemoToad.Api.Data
+namespace MnemoToad.Api.Services
 {
     public class NodeTypeService
     {

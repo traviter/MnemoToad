@@ -1,4 +1,4 @@
-﻿namespace MnemoToad.Api.Models
+namespace MnemoToad.Data.Entities
 {
     public class NodeType
     {
