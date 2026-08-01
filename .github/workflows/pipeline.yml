@@ -1,0 +1,86 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  id-token: write   # required for the Azure OIDC login steps inside deploy-api.yml / restart-api.yml
+  contents: read
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      api: ${{ steps.filter.outputs.api }}
+      data: ${{ steps.filter.outputs.data }}
+      karate: ${{ steps.filter.outputs.karate }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Detect changed areas
+        uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            api:
+              - 'MnemoToad.Api/**'
+              - 'MnemoToad.Data/**'
+            data:
+              - 'MnemoToad.DbMigrator/**'
+            karate:
+              - 'MnemoToad.Karate/**'
+
+  # TODO: once MnemoToad.Tests exists, add a unit-tests job here (needs: build, gates migrate)
+  # so the order becomes build -> unit tests -> data conversion -> deploy, matching the intended
+  # pipeline shape. Right now build -> data conversion -> deploy is functionally equivalent since
+  # build doesn't touch the database, but that gap disappears once there's something to test.
+
+  build:
+    needs: changes
+    if: needs.changes.outputs.api == 'true'
+    uses: ./.github/workflows/build-api.yml
+
+  migrate:
+    needs: [changes, build]
+    if: |
+      always() && !cancelled() &&
+      (needs.changes.outputs.api == 'true' || needs.changes.outputs.data == 'true') &&
+      (needs.build.result == 'success' || needs.build.result == 'skipped')
+    uses: ./.github/workflows/db-deploy.yml
+    secrets: inherit
+
+  deploy:
+    needs: [changes, migrate]
+    if: |
+      always() && !cancelled() &&
+      needs.changes.outputs.api == 'true' &&
+      needs.migrate.result == 'success'
+    uses: ./.github/workflows/deploy-api.yml
+    secrets: inherit
+
+  restart-api:
+    needs: [changes, migrate]
+    if: |
+      always() && !cancelled() &&
+      needs.changes.outputs.data == 'true' &&
+      needs.changes.outputs.api != 'true' &&
+      needs.migrate.result == 'success'
+    uses: ./.github/workflows/restart-api.yml
+    secrets: inherit
+
+  karate:
+    needs: [changes, build, migrate, deploy, restart-api]
+    if: |
+      always() && !cancelled() &&
+      (needs.changes.outputs.api == 'true' || needs.changes.outputs.data == 'true' || needs.changes.outputs.karate == 'true') &&
+      needs.build.result != 'failure' &&
+      needs.migrate.result != 'failure' &&
+      needs.deploy.result != 'failure' &&
+      needs['restart-api'].result != 'failure'
+    uses: ./.github/workflows/karate.yml
+    with:
+      tags: '@Smoke'
+      environment: azure

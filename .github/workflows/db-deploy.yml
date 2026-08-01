@@ -1,10 +1,6 @@
 name: Apply Database Migrations
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'MnemoToad.DbMigrator/**'
   workflow_call:
     secrets:
       DB_ADMIN_CONNECTION_STRING:

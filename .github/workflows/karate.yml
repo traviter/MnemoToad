@@ -1,10 +1,18 @@
 name: Karate API Tests
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'MnemoToad.Karate/**'
+  workflow_call:
+    inputs:
+      tags:
+        description: 'Karate tag expression, comma-separated (e.g. @Smoke or @Smoke,@Regression). Blank runs everything.'
+        required: false
+        default: '@Smoke'
+        type: string
+      environment:
+        description: 'Target environment (only "azure" is actually reachable from a GitHub-hosted runner today)'
+        required: false
+        default: 'azure'
+        type: string
   # schedule:
   #   - cron: '0 9 * * *'   # 09:00 UTC = 02:00 MST (Phoenix, no DST)
   workflow_dispatch:
@@ -42,9 +50,9 @@ jobs:
           if [ "${{ github.event_name }}" = "schedule" ]; then
             echo "tags=@Regression" >> "$GITHUB_OUTPUT"
             echo "env=azure" >> "$GITHUB_OUTPUT"
-          elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "tags=${{ github.event.inputs.tags }}" >> "$GITHUB_OUTPUT"
-            echo "env=${{ github.event.inputs.environment }}" >> "$GITHUB_OUTPUT"
+          elif [ "${{ github.event_name }}" = "workflow_dispatch" ] || [ "${{ github.event_name }}" = "workflow_call" ]; then
+            echo "tags=${{ inputs.tags }}" >> "$GITHUB_OUTPUT"
+            echo "env=${{ inputs.environment }}" >> "$GITHUB_OUTPUT"
           else
             echo "tags=@Smoke" >> "$GITHUB_OUTPUT"
             echo "env=azure" >> "$GITHUB_OUTPUT"
