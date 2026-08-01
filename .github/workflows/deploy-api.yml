@@ -55,3 +55,18 @@ jobs:
           app-name: ${{ env.AZURE_WEBAPP_NAME }}
           package: ${{ github.workspace }}/publish
           clean: true
+
+      - name: Wait for App Service to be healthy
+        run: |
+          url="https://${AZURE_WEBAPP_NAME,,}.azurewebsites.net/health"
+          echo "Polling $url"
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent --show-error --max-time 10 "$url" -o /dev/null; then
+              echo "App is healthy (attempt $attempt)."
+              exit 0
+            fi
+            echo "Not healthy yet (attempt $attempt/30), retrying in 10s..."
+            sleep 10
+          done
+          echo "App did not become healthy in time."
+          exit 1
