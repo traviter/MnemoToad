@@ -9,5 +9,6 @@ namespace MnemoToad.Api.Data
         public AppDbContext(DbContextOptions<AppDbContext> options) : base(options) { }
 
         public DbSet<Country> Country => Set<Country>();
+        public DbSet<NodeType> NodeType => Set<NodeType>();
     }
 }
