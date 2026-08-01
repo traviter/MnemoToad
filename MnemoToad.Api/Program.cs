@@ -23,13 +23,6 @@ if (app.Environment.IsDevelopment())
 
 app.MapGet("/health", () => Results.Ok(new { status = "pass" }));
 
-app.MapGet("/countries", async (AppDbContext db) =>
-    await db.Country.OrderBy(c => c.Name).ToListAsync());
-
-app.MapGet("/countries/{isoCode}", async (string isoCode, AppDbContext db) =>
-    await db.Country.FirstOrDefaultAsync(c => c.IsoCode == isoCode)
-        is Country country ? Results.Ok(country) : Results.NotFound());
-
 app.MapGet("/nodeTypes", async (NodeTypeService service) =>
     await service.GetAllAsync());
 
