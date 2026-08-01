@@ -7,10 +7,12 @@ namespace MnemoToad.Api.Services
     public class NodeTypeService : INodeTypeService
     {
         private readonly INodeTypeRepository _repository;
+        private readonly IKnowledgeNodeRepository _knowledgeNodeRepository;
 
-        public NodeTypeService(INodeTypeRepository repository)
+        public NodeTypeService(INodeTypeRepository repository, IKnowledgeNodeRepository knowledgeNodeRepository)
         {
             _repository = repository;
+            _knowledgeNodeRepository = knowledgeNodeRepository;
         }
 
         public Task<List<NodeType>> GetAllAsync() => _repository.GetAllAsync();
@@ -53,8 +55,8 @@ namespace MnemoToad.Api.Services
             var nodeType = await _repository.GetByIdAsync(id);
             if (nodeType is null) return false;
 
-            // TODO: once KnowledgeNode exists, check for references here
-            // and throw/return a conflict instead of deleting.
+            if (await _knowledgeNodeRepository.ExistsByNodeTypeIdAsync(id))
+                throw new ValidationException($"NodeType '{nodeType.Name}' cannot be deleted because it is referenced by one or more KnowledgeNodes.");
 
             _repository.Remove(nodeType);
             await _repository.SaveChangesAsync();

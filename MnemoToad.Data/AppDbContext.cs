@@ -9,5 +9,6 @@ namespace MnemoToad.Data
         public AppDbContext(DbContextOptions<AppDbContext> options) : base(options) { }
 
         public DbSet<NodeType> NodeType => Set<NodeType>();
+        public DbSet<KnowledgeNode> KnowledgeNode => Set<KnowledgeNode>();
     }
 }

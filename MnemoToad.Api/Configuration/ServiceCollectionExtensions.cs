@@ -24,6 +24,8 @@ namespace MnemoToad.Api.Configuration
 
             services.AddScoped<INodeTypeRepository, NodeTypeRepository>();
             services.AddScoped<INodeTypeService, NodeTypeService>();
+            services.AddScoped<IKnowledgeNodeRepository, KnowledgeNodeRepository>();
+            services.AddScoped<IKnowledgeNodeService, KnowledgeNodeService>();
 
             return services;
         }

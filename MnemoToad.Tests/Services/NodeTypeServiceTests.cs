@@ -11,13 +11,15 @@ namespace MnemoToad.Tests.Services
     public class NodeTypeServiceTests
     {
         private Mock<INodeTypeRepository> _repository = null!;
+        private Mock<IKnowledgeNodeRepository> _knowledgeNodeRepository = null!;
         private NodeTypeService _service = null!;
 
         [SetUp]
         public void SetUp()
         {
             _repository = new Mock<INodeTypeRepository>();
-            _service = new NodeTypeService(_repository.Object);
+            _knowledgeNodeRepository = new Mock<IKnowledgeNodeRepository>();
+            _service = new NodeTypeService(_repository.Object, _knowledgeNodeRepository.Object);
         }
 
         [Test]
@@ -127,6 +129,7 @@ namespace MnemoToad.Tests.Services
         {
             var nodeType = new NodeType { Id = Guid.NewGuid(), Name = "Person" };
             _repository.Setup(r => r.GetByIdAsync(nodeType.Id)).ReturnsAsync(nodeType);
+            _knowledgeNodeRepository.Setup(r => r.ExistsByNodeTypeIdAsync(nodeType.Id)).ReturnsAsync(false);
 
             var result = await _service.DeleteAsync(nodeType.Id);
 
@@ -143,6 +146,17 @@ namespace MnemoToad.Tests.Services
             var result = await _service.DeleteAsync(Guid.NewGuid());
 
             Assert.That(result, Is.False);
+        }
+
+        [Test]
+        public void DeleteAsync_WhenReferencedByKnowledgeNode_ThrowsValidationException()
+        {
+            var nodeType = new NodeType { Id = Guid.NewGuid(), Name = "Person" };
+            _repository.Setup(r => r.GetByIdAsync(nodeType.Id)).ReturnsAsync(nodeType);
+            _knowledgeNodeRepository.Setup(r => r.ExistsByNodeTypeIdAsync(nodeType.Id)).ReturnsAsync(true);
+
+            Assert.ThrowsAsync<ValidationException>(() => _service.DeleteAsync(nodeType.Id));
+            _repository.Verify(r => r.Remove(It.IsAny<NodeType>()), Times.Never);
         }
     }
 }

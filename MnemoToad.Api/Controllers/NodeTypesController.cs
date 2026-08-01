@@ -53,7 +53,16 @@ namespace MnemoToad.Api.Controllers
         }
 
         [HttpDelete("{id:guid}")]
-        public async Task<IActionResult> Delete(Guid id) =>
-            await _service.DeleteAsync(id) ? NoContent() : NotFound();
+        public async Task<IActionResult> Delete(Guid id)
+        {
+            try
+            {
+                return await _service.DeleteAsync(id) ? NoContent() : NotFound();
+            }
+            catch (ValidationException ex)
+            {
+                return BadRequest(new { error = ex.Message });
+            }
+        }
     }
 }
