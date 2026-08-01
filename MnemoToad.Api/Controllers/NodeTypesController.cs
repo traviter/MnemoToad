@@ -9,9 +9,9 @@ namespace MnemoToad.Api.Controllers
     [Route("nodeTypes")]
     public class NodeTypesController : ControllerBase
     {
-        private readonly NodeTypeService _service;
+        private readonly INodeTypeService _service;
 
-        public NodeTypesController(NodeTypeService service)
+        public NodeTypesController(INodeTypeService service)
         {
             _service = service;
         }

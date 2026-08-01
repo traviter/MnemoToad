@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using MnemoToad.Api.Services;
 using MnemoToad.Data;
+using MnemoToad.Data.Repositories;
 
 namespace MnemoToad.Api.Configuration
 {
@@ -21,7 +22,8 @@ namespace MnemoToad.Api.Configuration
             services.AddDbContext<AppDbContext>(options =>
                 options.UseNpgsql(configuration.GetConnectionString("Default")).UseSnakeCaseNamingConvention());
 
-            services.AddScoped<NodeTypeService>();
+            services.AddScoped<INodeTypeRepository, NodeTypeRepository>();
+            services.AddScoped<INodeTypeService, NodeTypeService>();
 
             return services;
         }

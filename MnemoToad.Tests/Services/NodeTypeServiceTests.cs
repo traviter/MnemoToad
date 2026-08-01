@@ -1,141 +1,148 @@
-using Microsoft.EntityFrameworkCore;
+using Moq;
 using MnemoToad.Api.Services;
-using MnemoToad.Data;
+using MnemoToad.Data.Entities;
+using MnemoToad.Data.Repositories;
+using NUnit.Framework;
 using System.ComponentModel.DataAnnotations;
 
 namespace MnemoToad.Tests.Services
 {
+    [TestFixture]
     public class NodeTypeServiceTests
     {
-        private static AppDbContext CreateContext() =>
-            new(new DbContextOptionsBuilder<AppDbContext>()
-                .UseInMemoryDatabase(Guid.NewGuid().ToString())
-                .Options);
+        private Mock<INodeTypeRepository> _repository = null!;
+        private NodeTypeService _service = null!;
 
-        [Fact]
+        [SetUp]
+        public void SetUp()
+        {
+            _repository = new Mock<INodeTypeRepository>();
+            _service = new NodeTypeService(_repository.Object);
+        }
+
+        [Test]
         public async Task CreateAsync_WithValidName_ReturnsCreatedNodeType()
         {
-            var service = new NodeTypeService(CreateContext());
+            _repository.Setup(r => r.ExistsWithNameAsync("Person", null)).ReturnsAsync(false);
 
-            var created = await service.CreateAsync("Person", "A human being");
+            var created = await _service.CreateAsync("Person", "A human being");
 
-            Assert.NotEqual(Guid.Empty, created.Id);
-            Assert.Equal("Person", created.Name);
-            Assert.Equal("A human being", created.Description);
+            Assert.That(created.Id, Is.Not.EqualTo(Guid.Empty));
+            Assert.That(created.Name, Is.EqualTo("Person"));
+            Assert.That(created.Description, Is.EqualTo("A human being"));
+            _repository.Verify(r => r.AddAsync(It.Is<NodeType>(n => n.Name == "Person")), Times.Once);
+            _repository.Verify(r => r.SaveChangesAsync(), Times.Once);
         }
 
-        [Fact]
-        public async Task CreateAsync_WithBlankName_ThrowsValidationException()
+        [Test]
+        public void CreateAsync_WithBlankName_ThrowsValidationException()
         {
-            var service = new NodeTypeService(CreateContext());
-
-            await Assert.ThrowsAsync<ValidationException>(() => service.CreateAsync("  ", null));
+            Assert.ThrowsAsync<ValidationException>(() => _service.CreateAsync("  ", null));
         }
 
-        [Fact]
-        public async Task CreateAsync_WithDuplicateName_ThrowsValidationException()
+        [Test]
+        public void CreateAsync_WithDuplicateName_ThrowsValidationException()
         {
-            var service = new NodeTypeService(CreateContext());
-            await service.CreateAsync("Person", null);
+            _repository.Setup(r => r.ExistsWithNameAsync("Person", null)).ReturnsAsync(true);
 
-            await Assert.ThrowsAsync<ValidationException>(() => service.CreateAsync("Person", null));
+            Assert.ThrowsAsync<ValidationException>(() => _service.CreateAsync("Person", null));
         }
 
-        [Fact]
-        public async Task GetAllAsync_ReturnsNodeTypesOrderedByName()
+        [Test]
+        public async Task GetAllAsync_ReturnsWhatRepositoryReturns()
         {
-            var service = new NodeTypeService(CreateContext());
-            await service.CreateAsync("Zebra", null);
-            await service.CreateAsync("Apple", null);
+            var expected = new List<NodeType> { new() { Id = Guid.NewGuid(), Name = "Apple" } };
+            _repository.Setup(r => r.GetAllAsync()).ReturnsAsync(expected);
 
-            var all = await service.GetAllAsync();
+            var all = await _service.GetAllAsync();
 
-            Assert.Equal(["Apple", "Zebra"], all.Select(n => n.Name));
+            Assert.That(all, Is.SameAs(expected));
         }
 
-        [Fact]
+        [Test]
         public async Task GetByIdAsync_WhenExists_ReturnsNodeType()
         {
-            var service = new NodeTypeService(CreateContext());
-            var created = await service.CreateAsync("Person", null);
+            var nodeType = new NodeType { Id = Guid.NewGuid(), Name = "Person" };
+            _repository.Setup(r => r.GetByIdAsync(nodeType.Id)).ReturnsAsync(nodeType);
 
-            var found = await service.GetByIdAsync(created.Id);
+            var found = await _service.GetByIdAsync(nodeType.Id);
 
-            Assert.NotNull(found);
-            Assert.Equal("Person", found.Name);
+            Assert.That(found, Is.SameAs(nodeType));
         }
 
-        [Fact]
+        [Test]
         public async Task GetByIdAsync_WhenNotFound_ReturnsNull()
         {
-            var service = new NodeTypeService(CreateContext());
+            _repository.Setup(r => r.GetByIdAsync(It.IsAny<Guid>())).ReturnsAsync((NodeType?)null);
 
-            var found = await service.GetByIdAsync(Guid.NewGuid());
+            var found = await _service.GetByIdAsync(Guid.NewGuid());
 
-            Assert.Null(found);
+            Assert.That(found, Is.Null);
         }
 
-        [Fact]
+        [Test]
         public async Task UpdateAsync_WhenNotFound_ReturnsNull()
         {
-            var service = new NodeTypeService(CreateContext());
+            _repository.Setup(r => r.GetByIdAsync(It.IsAny<Guid>())).ReturnsAsync((NodeType?)null);
 
-            var updated = await service.UpdateAsync(Guid.NewGuid(), "Person", null);
+            var updated = await _service.UpdateAsync(Guid.NewGuid(), "Person", null);
 
-            Assert.Null(updated);
+            Assert.That(updated, Is.Null);
         }
 
-        [Fact]
-        public async Task UpdateAsync_WithBlankName_ThrowsValidationException()
+        [Test]
+        public void UpdateAsync_WithBlankName_ThrowsValidationException()
         {
-            var service = new NodeTypeService(CreateContext());
-            var created = await service.CreateAsync("Person", null);
+            var nodeType = new NodeType { Id = Guid.NewGuid(), Name = "Person" };
+            _repository.Setup(r => r.GetByIdAsync(nodeType.Id)).ReturnsAsync(nodeType);
 
-            await Assert.ThrowsAsync<ValidationException>(() => service.UpdateAsync(created.Id, " ", null));
+            Assert.ThrowsAsync<ValidationException>(() => _service.UpdateAsync(nodeType.Id, " ", null));
         }
 
-        [Fact]
-        public async Task UpdateAsync_WithAnotherNodeTypesName_ThrowsValidationException()
+        [Test]
+        public void UpdateAsync_WithAnotherNodeTypesName_ThrowsValidationException()
         {
-            var service = new NodeTypeService(CreateContext());
-            await service.CreateAsync("Person", null);
-            var toUpdate = await service.CreateAsync("Place", null);
+            var nodeType = new NodeType { Id = Guid.NewGuid(), Name = "Place" };
+            _repository.Setup(r => r.GetByIdAsync(nodeType.Id)).ReturnsAsync(nodeType);
+            _repository.Setup(r => r.ExistsWithNameAsync("Person", nodeType.Id)).ReturnsAsync(true);
 
-            await Assert.ThrowsAsync<ValidationException>(() => service.UpdateAsync(toUpdate.Id, "Person", null));
+            Assert.ThrowsAsync<ValidationException>(() => _service.UpdateAsync(nodeType.Id, "Person", null));
         }
 
-        [Fact]
+        [Test]
         public async Task UpdateAsync_WithOwnUnchangedName_Succeeds()
         {
-            var service = new NodeTypeService(CreateContext());
-            var created = await service.CreateAsync("Person", "Old description");
+            var nodeType = new NodeType { Id = Guid.NewGuid(), Name = "Person", Description = "Old" };
+            _repository.Setup(r => r.GetByIdAsync(nodeType.Id)).ReturnsAsync(nodeType);
+            _repository.Setup(r => r.ExistsWithNameAsync("Person", nodeType.Id)).ReturnsAsync(false);
 
-            var updated = await service.UpdateAsync(created.Id, "Person", "New description");
+            var updated = await _service.UpdateAsync(nodeType.Id, "Person", "New description");
 
-            Assert.NotNull(updated);
-            Assert.Equal("New description", updated.Description);
+            Assert.That(updated, Is.Not.Null);
+            Assert.That(updated!.Description, Is.EqualTo("New description"));
         }
 
-        [Fact]
+        [Test]
         public async Task DeleteAsync_WhenExists_RemovesAndReturnsTrue()
         {
-            var service = new NodeTypeService(CreateContext());
-            var created = await service.CreateAsync("Person", null);
+            var nodeType = new NodeType { Id = Guid.NewGuid(), Name = "Person" };
+            _repository.Setup(r => r.GetByIdAsync(nodeType.Id)).ReturnsAsync(nodeType);
 
-            var result = await service.DeleteAsync(created.Id);
+            var result = await _service.DeleteAsync(nodeType.Id);
 
-            Assert.True(result);
-            Assert.Null(await service.GetByIdAsync(created.Id));
+            Assert.That(result, Is.True);
+            _repository.Verify(r => r.Remove(nodeType), Times.Once);
+            _repository.Verify(r => r.SaveChangesAsync(), Times.Once);
         }
 
-        [Fact]
+        [Test]
         public async Task DeleteAsync_WhenNotFound_ReturnsFalse()
         {
-            var service = new NodeTypeService(CreateContext());
+            _repository.Setup(r => r.GetByIdAsync(It.IsAny<Guid>())).ReturnsAsync((NodeType?)null);
 
-            var result = await service.DeleteAsync(Guid.NewGuid());
+            var result = await _service.DeleteAsync(Guid.NewGuid());
 
-            Assert.False(result);
+            Assert.That(result, Is.False);
         }
     }
 }
