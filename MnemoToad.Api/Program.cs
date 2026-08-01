@@ -1,22 +1,15 @@
-using Microsoft.EntityFrameworkCore;
-using MnemoToad.Api.Services;
-using MnemoToad.Data;
+using MnemoToad.Api.Configuration;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddControllers();
-builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
-
-builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseNpgsql(builder.Configuration.GetConnectionString("Default")).UseSnakeCaseNamingConvention());
-
-builder.Services.AddScoped<NodeTypeService>();
+builder.Services.AddApiServices(builder.Configuration);
 
 var app = builder.Build();
 
 if (app.Environment.IsDevelopment())
 {
+    // Serves the generated OpenAPI JSON, then an interactive browsable UI on top of it, at
+    // /swagger — Development-only, so nothing is exposed once deployed.
     app.UseSwagger();
     app.UseSwaggerUI();
 }
