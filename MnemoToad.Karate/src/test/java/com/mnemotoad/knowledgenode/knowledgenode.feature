@@ -1,4 +1,4 @@
-@Regression
+@Regression @KnowledgeNode
 Feature: KnowledgeNode API
 
   Background:

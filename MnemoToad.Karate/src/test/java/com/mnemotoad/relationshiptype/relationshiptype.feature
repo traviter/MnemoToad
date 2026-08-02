@@ -1,4 +1,4 @@
-@Regression
+@Regression @RelationshipType
 Feature: RelationshipType API
 
   Background:

@@ -1,4 +1,4 @@
- @Smoke
+ @Smoke @Health
   Feature: Health Check
 
     Scenario: API is up and healthy

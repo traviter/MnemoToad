@@ -1,4 +1,4 @@
-@Regression
+@Regression @NodeType
 Feature: NodeType API
 
   Background:
