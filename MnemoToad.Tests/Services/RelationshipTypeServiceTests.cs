@@ -1,9 +1,7 @@
-using Microsoft.EntityFrameworkCore;
 using Moq;
 using MnemoToad.Api.Services;
 using MnemoToad.Data.Entities;
 using MnemoToad.Data.Repositories;
-using Npgsql;
 using NUnit.Framework;
 using System.ComponentModel.DataAnnotations;
 
@@ -21,9 +19,6 @@ public class RelationshipTypeServiceTests
         _repository = new Mock<IRelationshipTypeRepository>();
         _service = new RelationshipTypeService(_repository.Object);
     }
-
-    private static PostgresException PostgresErrorWithCode(string sqlState) =>
-        new(messageText: "simulated failure", severity: "ERROR", invariantSeverity: "ERROR", sqlState: sqlState);
 
     [Test]
     public async Task CreateAsync_WithValidData_ReturnsCreatedRelationshipType()
@@ -45,31 +40,25 @@ public class RelationshipTypeServiceTests
         _repository.Verify(r => r.SaveChangesAsync(), Times.Never);
     }
 
+    // Constraint-violation translation (e.g. duplicate Name) now happens in
+    // RelationshipTypeRepository.SaveChangesAsync(), not here — the service has nothing left to
+    // translate, it just needs to not swallow whatever the repository throws.
     [Test]
-    public void CreateAsync_WhenRepositoryThrowsUniqueViolation_ThrowsValidationException()
+    public void CreateAsync_WhenRepositoryThrowsValidationException_PropagatesException()
     {
         _repository.Setup(r => r.SaveChangesAsync())
-            .ThrowsAsync(new DbUpdateException("save failed", PostgresErrorWithCode(PostgresErrorCodes.UniqueViolation)));
+            .ThrowsAsync(new ValidationException("A RelationshipType with that name already exists."));
 
         Assert.ThrowsAsync<ValidationException>(() => _service.CreateAsync(new RelationshipType { Name = "hasCapital" }));
     }
 
     [Test]
-    public void CreateAsync_WhenRepositoryThrowsUnrelatedDbUpdateException_PropagatesException()
+    public void CreateAsync_WhenRepositoryThrowsUnrelatedException_PropagatesException()
     {
         _repository.Setup(r => r.SaveChangesAsync())
-            .ThrowsAsync(new DbUpdateException("save failed", PostgresErrorWithCode(PostgresErrorCodes.NotNullViolation)));
+            .ThrowsAsync(new InvalidOperationException("could not connect to server"));
 
-        Assert.ThrowsAsync<DbUpdateException>(() => _service.CreateAsync(new RelationshipType { Name = "hasCapital" }));
-    }
-
-    [Test]
-    public void CreateAsync_WhenRepositoryThrowsConnectionFailure_PropagatesException()
-    {
-        _repository.Setup(r => r.SaveChangesAsync())
-            .ThrowsAsync(new NpgsqlException("could not connect to server"));
-
-        Assert.ThrowsAsync<NpgsqlException>(() => _service.CreateAsync(new RelationshipType { Name = "hasCapital" }));
+        Assert.ThrowsAsync<InvalidOperationException>(() => _service.CreateAsync(new RelationshipType { Name = "hasCapital" }));
     }
 
     [Test]
@@ -139,25 +128,25 @@ public class RelationshipTypeServiceTests
     }
 
     [Test]
-    public void UpdateAsync_WhenRepositoryThrowsUniqueViolation_ThrowsValidationException()
+    public void UpdateAsync_WhenRepositoryThrowsValidationException_PropagatesException()
     {
         var relationshipType = new RelationshipType { Id = Guid.NewGuid(), Name = "locatedIn" };
         _repository.Setup(r => r.GetByIdAsync(relationshipType.Id)).ReturnsAsync(relationshipType);
         _repository.Setup(r => r.SaveChangesAsync())
-            .ThrowsAsync(new DbUpdateException("save failed", PostgresErrorWithCode(PostgresErrorCodes.UniqueViolation)));
+            .ThrowsAsync(new ValidationException("A RelationshipType with that name already exists."));
 
         Assert.ThrowsAsync<ValidationException>(() => _service.UpdateAsync(new RelationshipType { Id = relationshipType.Id, Name = "hasCapital" }));
     }
 
     [Test]
-    public void UpdateAsync_WhenRepositoryThrowsConnectionFailure_PropagatesException()
+    public void UpdateAsync_WhenRepositoryThrowsUnrelatedException_PropagatesException()
     {
         var relationshipType = new RelationshipType { Id = Guid.NewGuid(), Name = "locatedIn" };
         _repository.Setup(r => r.GetByIdAsync(relationshipType.Id)).ReturnsAsync(relationshipType);
         _repository.Setup(r => r.SaveChangesAsync())
-            .ThrowsAsync(new NpgsqlException("could not connect to server"));
+            .ThrowsAsync(new InvalidOperationException("could not connect to server"));
 
-        Assert.ThrowsAsync<NpgsqlException>(() => _service.UpdateAsync(new RelationshipType { Id = relationshipType.Id, Name = "hasCapital" }));
+        Assert.ThrowsAsync<InvalidOperationException>(() => _service.UpdateAsync(new RelationshipType { Id = relationshipType.Id, Name = "hasCapital" }));
     }
 
     [Test]

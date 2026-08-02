@@ -1,5 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using MnemoToad.Data.Entities;
+using Npgsql;
+using System.ComponentModel.DataAnnotations;
 
 namespace MnemoToad.Data.Repositories;
 
@@ -26,5 +28,18 @@ public class RelationshipTypeRepository : IRelationshipTypeRepository
 
     public void Remove(RelationshipType relationshipType) => _db.RelationshipType.Remove(relationshipType);
 
-    public Task SaveChangesAsync() => _db.SaveChangesAsync();
+    public async Task SaveChangesAsync()
+    {
+        try
+        {
+            await _db.SaveChangesAsync();
+        }
+        catch (DbUpdateException ex) when (ex.InnerException is PostgresException
+        {
+            SqlState: PostgresErrorCodes.UniqueViolation
+        })
+        {
+            throw new ValidationException("A RelationshipType with that name already exists.");
+        }
+    }
 }

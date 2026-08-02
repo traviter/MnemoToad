@@ -1,9 +1,7 @@
-using Microsoft.EntityFrameworkCore;
 using Moq;
 using MnemoToad.Api.Services;
 using MnemoToad.Data.Entities;
 using MnemoToad.Data.Repositories;
-using Npgsql;
 using NUnit.Framework;
 using System.ComponentModel.DataAnnotations;
 
@@ -21,9 +19,6 @@ public class KnowledgeNodeServiceTests
         _repository = new Mock<IKnowledgeNodeRepository>();
         _service = new KnowledgeNodeService(_repository.Object);
     }
-
-    private static PostgresException PostgresErrorWithCode(string sqlState) =>
-        new(messageText: "simulated failure", severity: "ERROR", invariantSeverity: "ERROR", sqlState: sqlState);
 
     [Test]
     public async Task CreateAsync_WithValidData_ReturnsCreatedKnowledgeNode()
@@ -54,40 +49,26 @@ public class KnowledgeNodeServiceTests
         _repository.Verify(r => r.SaveChangesAsync(), Times.Never);
     }
 
+    // Constraint-violation translation (e.g. duplicate NodeTypeId+CanonicalName, or a NodeTypeId
+    // that doesn't exist) now happens in KnowledgeNodeRepository.SaveChangesAsync(), not here — the
+    // service has nothing left to translate, it just needs to not swallow whatever the repository
+    // throws.
     [Test]
-    public void CreateAsync_WhenRepositoryThrowsUniqueViolation_ThrowsValidationException()
+    public void CreateAsync_WhenRepositoryThrowsValidationException_PropagatesException()
     {
         _repository.Setup(r => r.SaveChangesAsync())
-            .ThrowsAsync(new DbUpdateException("save failed", PostgresErrorWithCode(PostgresErrorCodes.UniqueViolation)));
+            .ThrowsAsync(new ValidationException("A KnowledgeNode with the same NodeType and CanonicalName already exists."));
 
         Assert.ThrowsAsync<ValidationException>(() => _service.CreateAsync(new KnowledgeNode { NodeTypeId = Guid.NewGuid(), CanonicalName = "France" }));
     }
 
     [Test]
-    public void CreateAsync_WhenRepositoryThrowsForeignKeyViolation_ThrowsValidationException()
+    public void CreateAsync_WhenRepositoryThrowsUnrelatedException_PropagatesException()
     {
         _repository.Setup(r => r.SaveChangesAsync())
-            .ThrowsAsync(new DbUpdateException("save failed", PostgresErrorWithCode(PostgresErrorCodes.ForeignKeyViolation)));
+            .ThrowsAsync(new InvalidOperationException("could not connect to server"));
 
-        Assert.ThrowsAsync<ValidationException>(() => _service.CreateAsync(new KnowledgeNode { NodeTypeId = Guid.NewGuid(), CanonicalName = "France" }));
-    }
-
-    [Test]
-    public void CreateAsync_WhenRepositoryThrowsUnrelatedDbUpdateException_PropagatesException()
-    {
-        _repository.Setup(r => r.SaveChangesAsync())
-            .ThrowsAsync(new DbUpdateException("save failed", PostgresErrorWithCode(PostgresErrorCodes.NotNullViolation)));
-
-        Assert.ThrowsAsync<DbUpdateException>(() => _service.CreateAsync(new KnowledgeNode { NodeTypeId = Guid.NewGuid(), CanonicalName = "France" }));
-    }
-
-    [Test]
-    public void CreateAsync_WhenRepositoryThrowsConnectionFailure_PropagatesException()
-    {
-        _repository.Setup(r => r.SaveChangesAsync())
-            .ThrowsAsync(new NpgsqlException("could not connect to server"));
-
-        Assert.ThrowsAsync<NpgsqlException>(() => _service.CreateAsync(new KnowledgeNode { NodeTypeId = Guid.NewGuid(), CanonicalName = "France" }));
+        Assert.ThrowsAsync<InvalidOperationException>(() => _service.CreateAsync(new KnowledgeNode { NodeTypeId = Guid.NewGuid(), CanonicalName = "France" }));
     }
 
     [Test]
@@ -169,36 +150,25 @@ public class KnowledgeNodeServiceTests
     }
 
     [Test]
-    public void UpdateAsync_WhenRepositoryThrowsUniqueViolation_ThrowsValidationException()
+    public void UpdateAsync_WhenRepositoryThrowsValidationException_PropagatesException()
     {
         var knowledgeNode = new KnowledgeNode { Id = Guid.NewGuid(), NodeTypeId = Guid.NewGuid(), CanonicalName = "Rome" };
         _repository.Setup(r => r.GetByIdAsync(knowledgeNode.Id)).ReturnsAsync(knowledgeNode);
         _repository.Setup(r => r.SaveChangesAsync())
-            .ThrowsAsync(new DbUpdateException("save failed", PostgresErrorWithCode(PostgresErrorCodes.UniqueViolation)));
+            .ThrowsAsync(new ValidationException("The specified NodeType does not exist."));
 
         Assert.ThrowsAsync<ValidationException>(() => _service.UpdateAsync(new KnowledgeNode { Id = knowledgeNode.Id, NodeTypeId = knowledgeNode.NodeTypeId, CanonicalName = "Paris" }));
     }
 
     [Test]
-    public void UpdateAsync_WhenRepositoryThrowsForeignKeyViolation_ThrowsValidationException()
+    public void UpdateAsync_WhenRepositoryThrowsUnrelatedException_PropagatesException()
     {
         var knowledgeNode = new KnowledgeNode { Id = Guid.NewGuid(), NodeTypeId = Guid.NewGuid(), CanonicalName = "Rome" };
         _repository.Setup(r => r.GetByIdAsync(knowledgeNode.Id)).ReturnsAsync(knowledgeNode);
         _repository.Setup(r => r.SaveChangesAsync())
-            .ThrowsAsync(new DbUpdateException("save failed", PostgresErrorWithCode(PostgresErrorCodes.ForeignKeyViolation)));
+            .ThrowsAsync(new InvalidOperationException("could not connect to server"));
 
-        Assert.ThrowsAsync<ValidationException>(() => _service.UpdateAsync(new KnowledgeNode { Id = knowledgeNode.Id, NodeTypeId = knowledgeNode.NodeTypeId, CanonicalName = "Paris" }));
-    }
-
-    [Test]
-    public void UpdateAsync_WhenRepositoryThrowsConnectionFailure_PropagatesException()
-    {
-        var knowledgeNode = new KnowledgeNode { Id = Guid.NewGuid(), NodeTypeId = Guid.NewGuid(), CanonicalName = "Rome" };
-        _repository.Setup(r => r.GetByIdAsync(knowledgeNode.Id)).ReturnsAsync(knowledgeNode);
-        _repository.Setup(r => r.SaveChangesAsync())
-            .ThrowsAsync(new NpgsqlException("could not connect to server"));
-
-        Assert.ThrowsAsync<NpgsqlException>(() => _service.UpdateAsync(new KnowledgeNode { Id = knowledgeNode.Id, NodeTypeId = knowledgeNode.NodeTypeId, CanonicalName = "Paris" }));
+        Assert.ThrowsAsync<InvalidOperationException>(() => _service.UpdateAsync(new KnowledgeNode { Id = knowledgeNode.Id, NodeTypeId = knowledgeNode.NodeTypeId, CanonicalName = "Paris" }));
     }
 
     [Test]

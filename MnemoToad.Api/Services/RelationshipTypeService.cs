@@ -1,7 +1,5 @@
-using Microsoft.EntityFrameworkCore;
 using MnemoToad.Data.Entities;
 using MnemoToad.Data.Repositories;
-using Npgsql;
 using System.ComponentModel.DataAnnotations;
 
 namespace MnemoToad.Api.Services;
@@ -24,7 +22,7 @@ public class RelationshipTypeService : IRelationshipTypeService
         Validate(relationshipType.Name);
 
         await _repository.AddAsync(relationshipType);
-        await SaveChangesAsync();
+        await _repository.SaveChangesAsync();
         return relationshipType;
     }
 
@@ -38,7 +36,7 @@ public class RelationshipTypeService : IRelationshipTypeService
         existing.Name = relationshipType.Name;
         existing.InverseName = relationshipType.InverseName;
         existing.Description = relationshipType.Description;
-        await SaveChangesAsync();
+        await _repository.SaveChangesAsync();
         return existing;
     }
 
@@ -50,7 +48,7 @@ public class RelationshipTypeService : IRelationshipTypeService
         // TODO: guard against deleting a RelationshipType referenced by a Relationship, once
         // that table exists (no Relationship table/FK to check against yet).
         _repository.Remove(relationshipType);
-        await SaveChangesAsync();
+        await _repository.SaveChangesAsync();
         return true;
     }
 
@@ -58,20 +56,5 @@ public class RelationshipTypeService : IRelationshipTypeService
     {
         if (string.IsNullOrWhiteSpace(name))
             throw new ValidationException("Name is required.");
-    }
-
-    private async Task SaveChangesAsync()
-    {
-        try
-        {
-            await _repository.SaveChangesAsync();
-        }
-        catch (DbUpdateException ex) when (ex.InnerException is PostgresException
-        {
-            SqlState: PostgresErrorCodes.UniqueViolation
-        })
-        {
-            throw new ValidationException("A RelationshipType with that name already exists.");
-        }
     }
 }
