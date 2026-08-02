@@ -1,14 +1,12 @@
 using Microsoft.EntityFrameworkCore;
 using MnemoToad.Data.Entities;
 
-namespace MnemoToad.Data
+namespace MnemoToad.Data;
+
+public class AppDbContext : DbContext
 {
+    public AppDbContext(DbContextOptions<AppDbContext> options) : base(options) { }
 
-    public class AppDbContext : DbContext
-    {
-        public AppDbContext(DbContextOptions<AppDbContext> options) : base(options) { }
-
-        public DbSet<NodeType> NodeType => Set<NodeType>();
-        public DbSet<KnowledgeNode> KnowledgeNode => Set<KnowledgeNode>();
-    }
+    public DbSet<NodeType> NodeType => Set<NodeType>();
+    public DbSet<KnowledgeNode> KnowledgeNode => Set<KnowledgeNode>();
 }
