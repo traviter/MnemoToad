@@ -87,5 +87,5 @@ jobs:
       needs['restart-api'].result != 'failure'
     uses: ./.github/workflows/karate.yml
     with:
-      tags: '@Smoke'
+      tags: ''
       environment: azure

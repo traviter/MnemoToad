@@ -1,3 +1,4 @@
+ @ignore
  Feature: KnowledgeNode cleanup helper
 
     Scenario:

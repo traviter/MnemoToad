@@ -1,3 +1,4 @@
+@ignore
 Feature: Create a NodeType (reusable setup helper)
 
   Background:

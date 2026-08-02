@@ -1,3 +1,4 @@
+@ignore
 Feature: Create a KnowledgeNode (reusable setup helper)
 
   Background:
