@@ -7,12 +7,10 @@ namespace MnemoToad.Api.Services;
 public class NodeTypeService : INodeTypeService
 {
     private readonly INodeTypeRepository _repository;
-    private readonly IKnowledgeNodeRepository _knowledgeNodeRepository;
 
-    public NodeTypeService(INodeTypeRepository repository, IKnowledgeNodeRepository knowledgeNodeRepository)
+    public NodeTypeService(INodeTypeRepository repository)
     {
         _repository = repository;
-        _knowledgeNodeRepository = knowledgeNodeRepository;
     }
 
     public Task<List<NodeType>> GetAllAsync() => _repository.GetAllAsync();
@@ -21,11 +19,7 @@ public class NodeTypeService : INodeTypeService
 
     public async Task<NodeType> CreateAsync(NodeType nodeType)
     {
-        if (string.IsNullOrWhiteSpace(nodeType.Name))
-            throw new ValidationException("Name is required.");
-
-        if (await _repository.ExistsWithNameAsync(nodeType.Name))
-            throw new ValidationException($"A NodeType named '{nodeType.Name}' already exists.");
+        Validate(nodeType.Name);
 
         await _repository.AddAsync(nodeType);
         await _repository.SaveChangesAsync();
@@ -37,11 +31,7 @@ public class NodeTypeService : INodeTypeService
         var existing = await _repository.GetByIdAsync(nodeType.Id);
         if (existing is null) return null;
 
-        if (string.IsNullOrWhiteSpace(nodeType.Name))
-            throw new ValidationException("Name is required.");
-
-        if (await _repository.ExistsWithNameAsync(nodeType.Name, nodeType.Id))
-            throw new ValidationException($"A NodeType named '{nodeType.Name}' already exists.");
+        Validate(nodeType.Name);
 
         existing.Name = nodeType.Name;
         existing.Description = nodeType.Description;
@@ -54,11 +44,14 @@ public class NodeTypeService : INodeTypeService
         var nodeType = await _repository.GetByIdAsync(id);
         if (nodeType is null) return false;
 
-        if (await _knowledgeNodeRepository.ExistsByNodeTypeIdAsync(id))
-            throw new ValidationException($"NodeType '{nodeType.Name}' cannot be deleted because it is referenced by one or more KnowledgeNodes.");
-
         _repository.Remove(nodeType);
         await _repository.SaveChangesAsync();
         return true;
+    }
+
+    private static void Validate(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            throw new ValidationException("Name is required.");
     }
 }

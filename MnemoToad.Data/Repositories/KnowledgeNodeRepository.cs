@@ -26,9 +26,6 @@ public class KnowledgeNodeRepository : IKnowledgeNodeRepository
     public async Task<KnowledgeNode?> GetByIdAsync(Guid id) =>
         await _db.KnowledgeNode.FindAsync(id);
 
-    public Task<bool> ExistsByNodeTypeIdAsync(Guid nodeTypeId) =>
-        _db.KnowledgeNode.AnyAsync(n => n.NodeTypeId == nodeTypeId);
-
     public Task AddAsync(KnowledgeNode knowledgeNode)
     {
         _db.KnowledgeNode.Add(knowledgeNode);

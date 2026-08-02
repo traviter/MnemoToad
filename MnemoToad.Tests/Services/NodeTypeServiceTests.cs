@@ -11,22 +11,18 @@ namespace MnemoToad.Tests.Services;
 public class NodeTypeServiceTests
 {
     private Mock<INodeTypeRepository> _repository = null!;
-    private Mock<IKnowledgeNodeRepository> _knowledgeNodeRepository = null!;
     private NodeTypeService _service = null!;
 
     [SetUp]
     public void SetUp()
     {
         _repository = new Mock<INodeTypeRepository>();
-        _knowledgeNodeRepository = new Mock<IKnowledgeNodeRepository>();
-        _service = new NodeTypeService(_repository.Object, _knowledgeNodeRepository.Object);
+        _service = new NodeTypeService(_repository.Object);
     }
 
     [Test]
     public async Task CreateAsync_WithValidName_ReturnsCreatedNodeType()
     {
-        _repository.Setup(r => r.ExistsWithNameAsync("Person", null)).ReturnsAsync(false);
-
         var created = await _service.CreateAsync(new NodeType { Name = "Person", Description = "A human being" });
 
         Assert.That(created.Id, Is.Not.EqualTo(Guid.Empty));
@@ -40,14 +36,28 @@ public class NodeTypeServiceTests
     public void CreateAsync_WithBlankName_ThrowsValidationException()
     {
         Assert.ThrowsAsync<ValidationException>(() => _service.CreateAsync(new NodeType { Name = "  " }));
+        _repository.Verify(r => r.SaveChangesAsync(), Times.Never);
+    }
+
+    // Constraint-violation translation (e.g. duplicate Name) now happens in
+    // NodeTypeRepository.SaveChangesAsync(), not here — the service has nothing left to translate,
+    // it just needs to not swallow whatever the repository throws.
+    [Test]
+    public void CreateAsync_WhenRepositoryThrowsValidationException_PropagatesException()
+    {
+        _repository.Setup(r => r.SaveChangesAsync())
+            .ThrowsAsync(new ValidationException("A NodeType with that name already exists."));
+
+        Assert.ThrowsAsync<ValidationException>(() => _service.CreateAsync(new NodeType { Name = "Person" }));
     }
 
     [Test]
-    public void CreateAsync_WithDuplicateName_ThrowsValidationException()
+    public void CreateAsync_WhenRepositoryThrowsUnrelatedException_PropagatesException()
     {
-        _repository.Setup(r => r.ExistsWithNameAsync("Person", null)).ReturnsAsync(true);
+        _repository.Setup(r => r.SaveChangesAsync())
+            .ThrowsAsync(new InvalidOperationException("could not connect to server"));
 
-        Assert.ThrowsAsync<ValidationException>(() => _service.CreateAsync(new NodeType { Name = "Person" }));
+        Assert.ThrowsAsync<InvalidOperationException>(() => _service.CreateAsync(new NodeType { Name = "Person" }));
     }
 
     [Test]
@@ -99,29 +109,42 @@ public class NodeTypeServiceTests
         _repository.Setup(r => r.GetByIdAsync(nodeType.Id)).ReturnsAsync(nodeType);
 
         Assert.ThrowsAsync<ValidationException>(() => _service.UpdateAsync(new NodeType { Id = nodeType.Id, Name = " " }));
+        _repository.Verify(r => r.SaveChangesAsync(), Times.Never);
     }
 
     [Test]
-    public void UpdateAsync_WithAnotherNodeTypesName_ThrowsValidationException()
-    {
-        var nodeType = new NodeType { Id = Guid.NewGuid(), Name = "Place" };
-        _repository.Setup(r => r.GetByIdAsync(nodeType.Id)).ReturnsAsync(nodeType);
-        _repository.Setup(r => r.ExistsWithNameAsync("Person", nodeType.Id)).ReturnsAsync(true);
-
-        Assert.ThrowsAsync<ValidationException>(() => _service.UpdateAsync(new NodeType { Id = nodeType.Id, Name = "Person" }));
-    }
-
-    [Test]
-    public async Task UpdateAsync_WithOwnUnchangedName_Succeeds()
+    public async Task UpdateAsync_WithValidData_Succeeds()
     {
         var nodeType = new NodeType { Id = Guid.NewGuid(), Name = "Person", Description = "Old" };
         _repository.Setup(r => r.GetByIdAsync(nodeType.Id)).ReturnsAsync(nodeType);
-        _repository.Setup(r => r.ExistsWithNameAsync("Person", nodeType.Id)).ReturnsAsync(false);
 
         var updated = await _service.UpdateAsync(new NodeType { Id = nodeType.Id, Name = "Person", Description = "New description" });
 
         Assert.That(updated, Is.Not.Null);
         Assert.That(updated!.Description, Is.EqualTo("New description"));
+        _repository.Verify(r => r.SaveChangesAsync(), Times.Once);
+    }
+
+    [Test]
+    public void UpdateAsync_WhenRepositoryThrowsValidationException_PropagatesException()
+    {
+        var nodeType = new NodeType { Id = Guid.NewGuid(), Name = "Place" };
+        _repository.Setup(r => r.GetByIdAsync(nodeType.Id)).ReturnsAsync(nodeType);
+        _repository.Setup(r => r.SaveChangesAsync())
+            .ThrowsAsync(new ValidationException("A NodeType with that name already exists."));
+
+        Assert.ThrowsAsync<ValidationException>(() => _service.UpdateAsync(new NodeType { Id = nodeType.Id, Name = "Person" }));
+    }
+
+    [Test]
+    public void UpdateAsync_WhenRepositoryThrowsUnrelatedException_PropagatesException()
+    {
+        var nodeType = new NodeType { Id = Guid.NewGuid(), Name = "Place" };
+        _repository.Setup(r => r.GetByIdAsync(nodeType.Id)).ReturnsAsync(nodeType);
+        _repository.Setup(r => r.SaveChangesAsync())
+            .ThrowsAsync(new InvalidOperationException("could not connect to server"));
+
+        Assert.ThrowsAsync<InvalidOperationException>(() => _service.UpdateAsync(new NodeType { Id = nodeType.Id, Name = "Person" }));
     }
 
     [Test]
@@ -129,7 +152,6 @@ public class NodeTypeServiceTests
     {
         var nodeType = new NodeType { Id = Guid.NewGuid(), Name = "Person" };
         _repository.Setup(r => r.GetByIdAsync(nodeType.Id)).ReturnsAsync(nodeType);
-        _knowledgeNodeRepository.Setup(r => r.ExistsByNodeTypeIdAsync(nodeType.Id)).ReturnsAsync(false);
 
         var result = await _service.DeleteAsync(nodeType.Id);
 
@@ -149,13 +171,13 @@ public class NodeTypeServiceTests
     }
 
     [Test]
-    public void DeleteAsync_WhenReferencedByKnowledgeNode_ThrowsValidationException()
+    public void DeleteAsync_WhenRepositoryThrowsValidationException_PropagatesException()
     {
         var nodeType = new NodeType { Id = Guid.NewGuid(), Name = "Person" };
         _repository.Setup(r => r.GetByIdAsync(nodeType.Id)).ReturnsAsync(nodeType);
-        _knowledgeNodeRepository.Setup(r => r.ExistsByNodeTypeIdAsync(nodeType.Id)).ReturnsAsync(true);
+        _repository.Setup(r => r.SaveChangesAsync())
+            .ThrowsAsync(new ValidationException("The NodeType cannot be deleted because it is referenced by one or more KnowledgeNodes."));
 
         Assert.ThrowsAsync<ValidationException>(() => _service.DeleteAsync(nodeType.Id));
-        _repository.Verify(r => r.Remove(It.IsAny<NodeType>()), Times.Never);
     }
 }
