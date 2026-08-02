@@ -4,28 +4,17 @@ Feature: KnowledgeNode API
   Background:
     * url baseUrl
     * def uniqueName = read('classpath:com/mnemotoad/common/util.js')
-    * def createdKnowledgeNodeIds = []
-    * def createdNodeTypeIds = []
-    * configure afterScenario = read('cleanup.js')
-    * def createNodeType =
+    * def nodeTypeFixtures = call read('classpath:com/mnemotoad/nodetype/fixtures.js')
+    * def knowledgeNodeFixtures = call read('fixtures.js')
+    * def createNodeType = nodeTypeFixtures.create
+    * def createKnowledgeNode = knowledgeNodeFixtures.create
+    * configure afterScenario =
       """
-      function(overrides) {
-        var args = overrides || {};
-        var created = karate.call('classpath:com/mnemotoad/nodetype/create-nodetype.feature', args);
-        createdNodeTypeIds.push(created.response.id);
-        return created;
-      }
-      """
-    * def createKnowledgeNode =
-      """
-      function(overrides) {
-        var args = overrides || {};
-        var created = karate.call('create-knowledgenode.feature', args);
-        createdKnowledgeNodeIds.push(created.response.id);
-        if (created.createdNodeType) {
-          createdNodeTypeIds.push(created.createdNodeType.response.id);
-        }
-        return created;
+      function(){
+        // KnowledgeNodes must be deleted before their referenced NodeTypes -- the FK on
+        // knowledge_node.node_type_id would otherwise reject the NodeType delete.
+        knowledgeNodeFixtures.cleanup();
+        nodeTypeFixtures.cleanup();
       }
       """
 
@@ -40,7 +29,7 @@ Feature: KnowledgeNode API
     And match response.canonicalName == name
     And match response.description == 'Created by Karate test'
     And match response.id == '#uuid'
-    * eval createdKnowledgeNodeIds.push(response.id)
+    * eval knowledgeNodeFixtures.stageForCleanup(response.id)
 
   Scenario: Reject creation with missing canonical name
     * def nodeType = createNodeType()
@@ -82,10 +71,11 @@ Feature: KnowledgeNode API
     And request { nodeTypeId: '#(nodeType2.response.id)', canonicalName: '#(name)' }
     When method post
     Then status 201
-    * eval createdKnowledgeNodeIds.push(response.id)
+    * eval knowledgeNodeFixtures.stageForCleanup(response.id)
 
   Scenario: Get a knowledge node by id
-    * def created = createKnowledgeNode()
+    * def nodeType = createNodeType()
+    * def created = createKnowledgeNode({ nodeTypeId: nodeType.response.id })
 
     Given path 'nodes', created.response.id
     When method get
@@ -93,7 +83,8 @@ Feature: KnowledgeNode API
     And match response.canonicalName == created.response.canonicalName
 
   Scenario: List knowledge nodes includes the newly created one
-    * def created = createKnowledgeNode()
+    * def nodeType = createNodeType()
+    * def created = createKnowledgeNode({ nodeTypeId: nodeType.response.id })
 
     Given path 'nodes'
     When method get
@@ -116,7 +107,8 @@ Feature: KnowledgeNode API
     And match foundIds !contains created2.response.id
 
   Scenario: Update a knowledge node
-    * def created = createKnowledgeNode()
+    * def nodeType = createNodeType()
+    * def created = createKnowledgeNode({ nodeTypeId: nodeType.response.id })
 
     * def updatedName = created.response.canonicalName + '_Updated'
     Given path 'nodes', created.response.id
@@ -139,7 +131,8 @@ Feature: KnowledgeNode API
     Then status 400
 
   Scenario: Reject update referencing a node type that does not exist
-    * def created = createKnowledgeNode()
+    * def nodeType = createNodeType()
+    * def created = createKnowledgeNode({ nodeTypeId: nodeType.response.id })
     * def randomId = '' + java.util.UUID.randomUUID()
 
     Given path 'nodes', created.response.id
@@ -148,7 +141,8 @@ Feature: KnowledgeNode API
     Then status 400
 
   Scenario: Delete a knowledge node
-    * def created = createKnowledgeNode()
+    * def nodeType = createNodeType()
+    * def created = createKnowledgeNode({ nodeTypeId: nodeType.response.id })
 
     Given path 'nodes', created.response.id
     When method delete

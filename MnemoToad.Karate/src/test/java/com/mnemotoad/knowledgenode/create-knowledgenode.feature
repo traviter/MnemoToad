@@ -5,8 +5,8 @@ Feature: Create a KnowledgeNode (reusable setup helper)
 
   Scenario:
     * def uniqueName = read('classpath:com/mnemotoad/common/util.js')
-    * def createdNodeType = karate.get('nodeTypeId') ? null : karate.call('classpath:com/mnemotoad/nodetype/create-nodetype.feature')
-    * def nodeTypeId = karate.get('nodeTypeId') ? karate.get('nodeTypeId') : createdNodeType.response.id
+    * def nodeTypeId = karate.get('nodeTypeId')
+    * assert nodeTypeId != null
     * def canonicalName = karate.get('canonicalName') ? karate.get('canonicalName') : uniqueName('KnowledgeNode')
     * def description = karate.get('description')
     Given path 'nodes'

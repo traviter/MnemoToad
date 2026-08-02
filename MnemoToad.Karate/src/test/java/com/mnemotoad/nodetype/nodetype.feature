@@ -4,17 +4,9 @@ Feature: NodeType API
   Background:
     * url baseUrl
     * def uniqueName = read('classpath:com/mnemotoad/common/util.js')
-    * def createdNodeTypeIds = []
-    * configure afterScenario = read('cleanup.js')
-    * def createNodeType =
-      """
-      function(overrides) {
-        var args = overrides || {};
-        var created = karate.call('create-nodetype.feature', args);
-        createdNodeTypeIds.push(created.response.id);
-        return created;
-      }
-      """
+    * def nodeTypeFixtures = call read('fixtures.js')
+    * def createNodeType = nodeTypeFixtures.create
+    * configure afterScenario = nodeTypeFixtures.cleanup
 
   Scenario: Create a node type successfully
     * def name = uniqueName('NodeType')
@@ -25,7 +17,7 @@ Feature: NodeType API
     And match response.name == name
     And match response.description == 'Created by Karate test'
     And match response.id == '#uuid'
-    * eval createdNodeTypeIds.push(response.id)
+    * eval nodeTypeFixtures.stageForCleanup(response.id)
 
   Scenario: Create multiple node types
     * def name1 = uniqueName('NodeType')
@@ -36,21 +28,21 @@ Feature: NodeType API
     And request { name: '#(name1)' }
     When method post
     Then status 201
-    * eval createdNodeTypeIds.push(response.id)
+    * eval nodeTypeFixtures.stageForCleanup(response.id)
     * def id1 = response.id
 
     Given path 'nodeTypes'
     And request { name: '#(name2)' }
     When method post
     Then status 201
-    * eval createdNodeTypeIds.push(response.id)
+    * eval nodeTypeFixtures.stageForCleanup(response.id)
     * def id2 = response.id
 
     Given path 'nodeTypes'
     And request { name: '#(name3)' }
     When method post
     Then status 201
-    * eval createdNodeTypeIds.push(response.id)
+    * eval nodeTypeFixtures.stageForCleanup(response.id)
     * def id3 = response.id
 
     * match id1 != id2
