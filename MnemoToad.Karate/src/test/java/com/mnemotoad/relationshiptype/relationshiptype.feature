@@ -5,8 +5,24 @@ Feature: RelationshipType API
     * url baseUrl
     * def uniqueName = read('classpath:com/mnemotoad/common/util.js')
     * def relationshipTypeFixtures = call read('fixtures.js')
+    * def nodeTypeFixtures = call read('classpath:com/mnemotoad/nodetype/fixtures.js')
+    * def knowledgeNodeFixtures = call read('classpath:com/mnemotoad/knowledgenode/fixtures.js')
+    * def knowledgeRelationFixtures = call read('classpath:com/mnemotoad/knowledgerelation/fixtures.js')
     * def createRelationshipType = relationshipTypeFixtures.create
-    * configure afterScenario = relationshipTypeFixtures.cleanup
+    * def createNodeType = nodeTypeFixtures.create
+    * def createKnowledgeNode = knowledgeNodeFixtures.create
+    * def createKnowledgeRelation = knowledgeRelationFixtures.create
+    * configure afterScenario =
+      """
+      function(){
+        // Clean up dependents before dependencies: the relation references the nodes and the
+        // relationship type, and the nodes reference the node type.
+        knowledgeRelationFixtures.cleanup();
+        knowledgeNodeFixtures.cleanup();
+        nodeTypeFixtures.cleanup();
+        relationshipTypeFixtures.cleanup();
+      }
+      """
 
   Scenario: Create a relationship type successfully
     * def name = uniqueName('RelationshipType')
@@ -88,13 +104,13 @@ Feature: RelationshipType API
     When method get
     Then status 404
 
-  # TODO: no Relationship table/FK exists yet to reference a RelationshipType, so this scenario
-  # can't be exercised for real. Un-ignore and implement once relationships are added, alongside
-  # the corresponding delete-guard in RelationshipTypeService (see its DeleteAsync TODO).
-  @ignore
-  Scenario: Reject deleting a relationship type that is referenced by a relationship
-    * def created = createRelationshipType()
+  Scenario: Reject deleting a relationship type that is referenced by a relation
+    * def relationshipType = createRelationshipType()
+    * def nodeType = createNodeType()
+    * def sourceNode = createKnowledgeNode({ nodeTypeId: nodeType.response.id })
+    * def targetNode = createKnowledgeNode({ nodeTypeId: nodeType.response.id })
+    * def created = createKnowledgeRelation({ sourceNodeId: sourceNode.response.id, relationshipTypeId: relationshipType.response.id, targetNodeId: targetNode.response.id })
 
-    Given path 'relationshipTypes', created.response.id
+    Given path 'relationshipTypes', relationshipType.response.id
     When method delete
     Then status 400

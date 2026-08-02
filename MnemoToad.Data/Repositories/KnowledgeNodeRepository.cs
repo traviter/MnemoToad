@@ -34,11 +34,6 @@ public class KnowledgeNodeRepository : IKnowledgeNodeRepository
 
     public void Remove(KnowledgeNode knowledgeNode) => _db.KnowledgeNode.Remove(knowledgeNode);
 
-    // NodeTypeId existence and NodeTypeId/CanonicalName uniqueness are both enforced by DB
-    // constraints (the FK and the composite UNIQUE key) rather than pre-flighted before writing, so
-    // a violation surfaces only here. Translate just those two known constraint failures into a
-    // ValidationException (the service layer maps that to a 400); anything else (e.g. the DB being
-    // unreachable) propagates unhandled and becomes a 500.
     public async Task SaveChangesAsync()
     {
         try
@@ -54,10 +49,19 @@ public class KnowledgeNodeRepository : IKnowledgeNodeRepository
         }
         catch (DbUpdateException ex) when (ex.InnerException is PostgresException
         {
-            SqlState: PostgresErrorCodes.ForeignKeyViolation
+            SqlState: PostgresErrorCodes.ForeignKeyViolation,
+            TableName: "knowledge_node"
         })
         {
             throw new ValidationException("The specified NodeType does not exist.");
+        }
+        catch (DbUpdateException ex) when (ex.InnerException is PostgresException
+        {
+            SqlState: PostgresErrorCodes.ForeignKeyViolation,
+            TableName: "knowledge_relation"
+        })
+        {
+            throw new ValidationException("The KnowledgeNode cannot be deleted because it is referenced by one or more KnowledgeRelations.");
         }
     }
 }

@@ -45,8 +45,6 @@ public class RelationshipTypeService : IRelationshipTypeService
         var relationshipType = await _repository.GetByIdAsync(id);
         if (relationshipType is null) return false;
 
-        // TODO: guard against deleting a RelationshipType referenced by a Relationship, once
-        // that table exists (no Relationship table/FK to check against yet).
         _repository.Remove(relationshipType);
         await _repository.SaveChangesAsync();
         return true;

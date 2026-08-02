@@ -41,5 +41,13 @@ public class RelationshipTypeRepository : IRelationshipTypeRepository
         {
             throw new ValidationException("A RelationshipType with that name already exists.");
         }
+        catch (DbUpdateException ex) when (ex.InnerException is PostgresException
+        {
+            SqlState: PostgresErrorCodes.ForeignKeyViolation,
+            TableName: "knowledge_relation"
+        })
+        {
+            throw new ValidationException("The RelationshipType cannot be deleted because it is referenced by one or more KnowledgeRelations.");
+        }
     }
 }
