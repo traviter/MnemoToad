@@ -30,7 +30,7 @@ public class KnowledgeNodeServiceTests
     {
         var nodeTypeId = Guid.NewGuid();
 
-        var created = await _service.CreateAsync(nodeTypeId, "France", "A country");
+        var created = await _service.CreateAsync(new KnowledgeNode { NodeTypeId = nodeTypeId, CanonicalName = "France", Description = "A country" });
 
         Assert.That(created.Id, Is.Not.EqualTo(Guid.Empty));
         Assert.That(created.NodeTypeId, Is.EqualTo(nodeTypeId));
@@ -43,14 +43,14 @@ public class KnowledgeNodeServiceTests
     [Test]
     public void CreateAsync_WithEmptyNodeTypeId_ThrowsValidationException()
     {
-        Assert.ThrowsAsync<ValidationException>(() => _service.CreateAsync(Guid.Empty, "France", null));
+        Assert.ThrowsAsync<ValidationException>(() => _service.CreateAsync(new KnowledgeNode { NodeTypeId = Guid.Empty, CanonicalName = "France" }));
         _repository.Verify(r => r.SaveChangesAsync(), Times.Never);
     }
 
     [Test]
     public void CreateAsync_WithBlankCanonicalName_ThrowsValidationException()
     {
-        Assert.ThrowsAsync<ValidationException>(() => _service.CreateAsync(Guid.NewGuid(), "  ", null));
+        Assert.ThrowsAsync<ValidationException>(() => _service.CreateAsync(new KnowledgeNode { NodeTypeId = Guid.NewGuid(), CanonicalName = "  " }));
         _repository.Verify(r => r.SaveChangesAsync(), Times.Never);
     }
 
@@ -60,7 +60,7 @@ public class KnowledgeNodeServiceTests
         _repository.Setup(r => r.SaveChangesAsync())
             .ThrowsAsync(new DbUpdateException("save failed", PostgresErrorWithCode(PostgresErrorCodes.UniqueViolation)));
 
-        Assert.ThrowsAsync<ValidationException>(() => _service.CreateAsync(Guid.NewGuid(), "France", null));
+        Assert.ThrowsAsync<ValidationException>(() => _service.CreateAsync(new KnowledgeNode { NodeTypeId = Guid.NewGuid(), CanonicalName = "France" }));
     }
 
     [Test]
@@ -69,7 +69,7 @@ public class KnowledgeNodeServiceTests
         _repository.Setup(r => r.SaveChangesAsync())
             .ThrowsAsync(new DbUpdateException("save failed", PostgresErrorWithCode(PostgresErrorCodes.ForeignKeyViolation)));
 
-        Assert.ThrowsAsync<ValidationException>(() => _service.CreateAsync(Guid.NewGuid(), "France", null));
+        Assert.ThrowsAsync<ValidationException>(() => _service.CreateAsync(new KnowledgeNode { NodeTypeId = Guid.NewGuid(), CanonicalName = "France" }));
     }
 
     [Test]
@@ -78,7 +78,7 @@ public class KnowledgeNodeServiceTests
         _repository.Setup(r => r.SaveChangesAsync())
             .ThrowsAsync(new DbUpdateException("save failed", PostgresErrorWithCode(PostgresErrorCodes.NotNullViolation)));
 
-        Assert.ThrowsAsync<DbUpdateException>(() => _service.CreateAsync(Guid.NewGuid(), "France", null));
+        Assert.ThrowsAsync<DbUpdateException>(() => _service.CreateAsync(new KnowledgeNode { NodeTypeId = Guid.NewGuid(), CanonicalName = "France" }));
     }
 
     [Test]
@@ -87,7 +87,7 @@ public class KnowledgeNodeServiceTests
         _repository.Setup(r => r.SaveChangesAsync())
             .ThrowsAsync(new NpgsqlException("could not connect to server"));
 
-        Assert.ThrowsAsync<NpgsqlException>(() => _service.CreateAsync(Guid.NewGuid(), "France", null));
+        Assert.ThrowsAsync<NpgsqlException>(() => _service.CreateAsync(new KnowledgeNode { NodeTypeId = Guid.NewGuid(), CanonicalName = "France" }));
     }
 
     [Test]
@@ -139,7 +139,7 @@ public class KnowledgeNodeServiceTests
     {
         _repository.Setup(r => r.GetByIdAsync(It.IsAny<Guid>())).ReturnsAsync((KnowledgeNode?)null);
 
-        var updated = await _service.UpdateAsync(Guid.NewGuid(), Guid.NewGuid(), "Paris", null);
+        var updated = await _service.UpdateAsync(new KnowledgeNode { Id = Guid.NewGuid(), NodeTypeId = Guid.NewGuid(), CanonicalName = "Paris" });
 
         Assert.That(updated, Is.Null);
     }
@@ -150,7 +150,7 @@ public class KnowledgeNodeServiceTests
         var knowledgeNode = new KnowledgeNode { Id = Guid.NewGuid(), NodeTypeId = Guid.NewGuid(), CanonicalName = "Paris" };
         _repository.Setup(r => r.GetByIdAsync(knowledgeNode.Id)).ReturnsAsync(knowledgeNode);
 
-        Assert.ThrowsAsync<ValidationException>(() => _service.UpdateAsync(knowledgeNode.Id, knowledgeNode.NodeTypeId, " ", null));
+        Assert.ThrowsAsync<ValidationException>(() => _service.UpdateAsync(new KnowledgeNode { Id = knowledgeNode.Id, NodeTypeId = knowledgeNode.NodeTypeId, CanonicalName = " " }));
         _repository.Verify(r => r.SaveChangesAsync(), Times.Never);
     }
 
@@ -161,7 +161,7 @@ public class KnowledgeNodeServiceTests
         var knowledgeNode = new KnowledgeNode { Id = Guid.NewGuid(), NodeTypeId = nodeType.Id, CanonicalName = "Paris", Description = "Old" };
         _repository.Setup(r => r.GetByIdAsync(knowledgeNode.Id)).ReturnsAsync(knowledgeNode);
 
-        var updated = await _service.UpdateAsync(knowledgeNode.Id, nodeType.Id, "Paris", "New description");
+        var updated = await _service.UpdateAsync(new KnowledgeNode { Id = knowledgeNode.Id, NodeTypeId = nodeType.Id, CanonicalName = "Paris", Description = "New description" });
 
         Assert.That(updated, Is.Not.Null);
         Assert.That(updated!.Description, Is.EqualTo("New description"));
@@ -176,7 +176,7 @@ public class KnowledgeNodeServiceTests
         _repository.Setup(r => r.SaveChangesAsync())
             .ThrowsAsync(new DbUpdateException("save failed", PostgresErrorWithCode(PostgresErrorCodes.UniqueViolation)));
 
-        Assert.ThrowsAsync<ValidationException>(() => _service.UpdateAsync(knowledgeNode.Id, knowledgeNode.NodeTypeId, "Paris", null));
+        Assert.ThrowsAsync<ValidationException>(() => _service.UpdateAsync(new KnowledgeNode { Id = knowledgeNode.Id, NodeTypeId = knowledgeNode.NodeTypeId, CanonicalName = "Paris" }));
     }
 
     [Test]
@@ -187,7 +187,7 @@ public class KnowledgeNodeServiceTests
         _repository.Setup(r => r.SaveChangesAsync())
             .ThrowsAsync(new DbUpdateException("save failed", PostgresErrorWithCode(PostgresErrorCodes.ForeignKeyViolation)));
 
-        Assert.ThrowsAsync<ValidationException>(() => _service.UpdateAsync(knowledgeNode.Id, knowledgeNode.NodeTypeId, "Paris", null));
+        Assert.ThrowsAsync<ValidationException>(() => _service.UpdateAsync(new KnowledgeNode { Id = knowledgeNode.Id, NodeTypeId = knowledgeNode.NodeTypeId, CanonicalName = "Paris" }));
     }
 
     [Test]
@@ -198,7 +198,7 @@ public class KnowledgeNodeServiceTests
         _repository.Setup(r => r.SaveChangesAsync())
             .ThrowsAsync(new NpgsqlException("could not connect to server"));
 
-        Assert.ThrowsAsync<NpgsqlException>(() => _service.UpdateAsync(knowledgeNode.Id, knowledgeNode.NodeTypeId, "Paris", null));
+        Assert.ThrowsAsync<NpgsqlException>(() => _service.UpdateAsync(new KnowledgeNode { Id = knowledgeNode.Id, NodeTypeId = knowledgeNode.NodeTypeId, CanonicalName = "Paris" }));
     }
 
     [Test]

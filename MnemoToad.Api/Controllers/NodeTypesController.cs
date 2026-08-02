@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using MnemoToad.Api.Contracts;
 using MnemoToad.Api.Services;
+using MnemoToad.Data.Entities;
 using System.ComponentModel.DataAnnotations;
 
 namespace MnemoToad.Api.Controllers;
@@ -29,7 +30,7 @@ public class NodeTypesController : ControllerBase
     {
         try
         {
-            var created = await _service.CreateAsync(request.Name, request.Description);
+            var created = await _service.CreateAsync(new NodeType { Name = request.Name, Description = request.Description });
             return Created($"/nodeTypes/{created.Id}", created);
         }
         catch (ValidationException ex)
@@ -43,7 +44,7 @@ public class NodeTypesController : ControllerBase
     {
         try
         {
-            var updated = await _service.UpdateAsync(id, request.Name, request.Description);
+            var updated = await _service.UpdateAsync(new NodeType { Id = id, Name = request.Name, Description = request.Description });
             return updated is not null ? Ok(updated) : NotFound();
         }
         catch (ValidationException ex)

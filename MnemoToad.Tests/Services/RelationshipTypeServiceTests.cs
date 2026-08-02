@@ -28,7 +28,7 @@ public class RelationshipTypeServiceTests
     [Test]
     public async Task CreateAsync_WithValidData_ReturnsCreatedRelationshipType()
     {
-        var created = await _service.CreateAsync("hasCapital", "isCapitalOf", "Links a country to its capital");
+        var created = await _service.CreateAsync(new RelationshipType { Name = "hasCapital", InverseName = "isCapitalOf", Description = "Links a country to its capital" });
 
         Assert.That(created.Id, Is.Not.EqualTo(Guid.Empty));
         Assert.That(created.Name, Is.EqualTo("hasCapital"));
@@ -41,7 +41,7 @@ public class RelationshipTypeServiceTests
     [Test]
     public void CreateAsync_WithBlankName_ThrowsValidationException()
     {
-        Assert.ThrowsAsync<ValidationException>(() => _service.CreateAsync("  ", null, null));
+        Assert.ThrowsAsync<ValidationException>(() => _service.CreateAsync(new RelationshipType { Name = "  " }));
         _repository.Verify(r => r.SaveChangesAsync(), Times.Never);
     }
 
@@ -51,7 +51,7 @@ public class RelationshipTypeServiceTests
         _repository.Setup(r => r.SaveChangesAsync())
             .ThrowsAsync(new DbUpdateException("save failed", PostgresErrorWithCode(PostgresErrorCodes.UniqueViolation)));
 
-        Assert.ThrowsAsync<ValidationException>(() => _service.CreateAsync("hasCapital", null, null));
+        Assert.ThrowsAsync<ValidationException>(() => _service.CreateAsync(new RelationshipType { Name = "hasCapital" }));
     }
 
     [Test]
@@ -60,7 +60,7 @@ public class RelationshipTypeServiceTests
         _repository.Setup(r => r.SaveChangesAsync())
             .ThrowsAsync(new DbUpdateException("save failed", PostgresErrorWithCode(PostgresErrorCodes.NotNullViolation)));
 
-        Assert.ThrowsAsync<DbUpdateException>(() => _service.CreateAsync("hasCapital", null, null));
+        Assert.ThrowsAsync<DbUpdateException>(() => _service.CreateAsync(new RelationshipType { Name = "hasCapital" }));
     }
 
     [Test]
@@ -69,7 +69,7 @@ public class RelationshipTypeServiceTests
         _repository.Setup(r => r.SaveChangesAsync())
             .ThrowsAsync(new NpgsqlException("could not connect to server"));
 
-        Assert.ThrowsAsync<NpgsqlException>(() => _service.CreateAsync("hasCapital", null, null));
+        Assert.ThrowsAsync<NpgsqlException>(() => _service.CreateAsync(new RelationshipType { Name = "hasCapital" }));
     }
 
     [Test]
@@ -109,7 +109,7 @@ public class RelationshipTypeServiceTests
     {
         _repository.Setup(r => r.GetByIdAsync(It.IsAny<Guid>())).ReturnsAsync((RelationshipType?)null);
 
-        var updated = await _service.UpdateAsync(Guid.NewGuid(), "locatedIn", null, null);
+        var updated = await _service.UpdateAsync(new RelationshipType { Id = Guid.NewGuid(), Name = "locatedIn" });
 
         Assert.That(updated, Is.Null);
     }
@@ -120,7 +120,7 @@ public class RelationshipTypeServiceTests
         var relationshipType = new RelationshipType { Id = Guid.NewGuid(), Name = "locatedIn" };
         _repository.Setup(r => r.GetByIdAsync(relationshipType.Id)).ReturnsAsync(relationshipType);
 
-        Assert.ThrowsAsync<ValidationException>(() => _service.UpdateAsync(relationshipType.Id, " ", null, null));
+        Assert.ThrowsAsync<ValidationException>(() => _service.UpdateAsync(new RelationshipType { Id = relationshipType.Id, Name = " " }));
         _repository.Verify(r => r.SaveChangesAsync(), Times.Never);
     }
 
@@ -130,7 +130,7 @@ public class RelationshipTypeServiceTests
         var relationshipType = new RelationshipType { Id = Guid.NewGuid(), Name = "locatedIn", Description = "Old" };
         _repository.Setup(r => r.GetByIdAsync(relationshipType.Id)).ReturnsAsync(relationshipType);
 
-        var updated = await _service.UpdateAsync(relationshipType.Id, "locatedIn", "contains", "New description");
+        var updated = await _service.UpdateAsync(new RelationshipType { Id = relationshipType.Id, Name = "locatedIn", InverseName = "contains", Description = "New description" });
 
         Assert.That(updated, Is.Not.Null);
         Assert.That(updated!.InverseName, Is.EqualTo("contains"));
@@ -146,7 +146,7 @@ public class RelationshipTypeServiceTests
         _repository.Setup(r => r.SaveChangesAsync())
             .ThrowsAsync(new DbUpdateException("save failed", PostgresErrorWithCode(PostgresErrorCodes.UniqueViolation)));
 
-        Assert.ThrowsAsync<ValidationException>(() => _service.UpdateAsync(relationshipType.Id, "hasCapital", null, null));
+        Assert.ThrowsAsync<ValidationException>(() => _service.UpdateAsync(new RelationshipType { Id = relationshipType.Id, Name = "hasCapital" }));
     }
 
     [Test]
@@ -157,7 +157,7 @@ public class RelationshipTypeServiceTests
         _repository.Setup(r => r.SaveChangesAsync())
             .ThrowsAsync(new NpgsqlException("could not connect to server"));
 
-        Assert.ThrowsAsync<NpgsqlException>(() => _service.UpdateAsync(relationshipType.Id, "hasCapital", null, null));
+        Assert.ThrowsAsync<NpgsqlException>(() => _service.UpdateAsync(new RelationshipType { Id = relationshipType.Id, Name = "hasCapital" }));
     }
 
     [Test]

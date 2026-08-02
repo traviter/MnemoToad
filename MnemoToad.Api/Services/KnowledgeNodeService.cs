@@ -19,34 +19,27 @@ public class KnowledgeNodeService : IKnowledgeNodeService
 
     public Task<KnowledgeNode?> GetByIdAsync(Guid id) => _repository.GetByIdAsync(id);
 
-    public async Task<KnowledgeNode> CreateAsync(Guid nodeTypeId, string canonicalName, string? description)
+    public async Task<KnowledgeNode> CreateAsync(KnowledgeNode knowledgeNode)
     {
-        Validate(nodeTypeId, canonicalName);
+        Validate(knowledgeNode.NodeTypeId, knowledgeNode.CanonicalName);
 
-        var knowledgeNode = new KnowledgeNode
-        {
-            Id = Guid.NewGuid(),
-            NodeTypeId = nodeTypeId,
-            CanonicalName = canonicalName,
-            Description = description
-        };
         await _repository.AddAsync(knowledgeNode);
         await SaveChangesAsync();
         return knowledgeNode;
     }
 
-    public async Task<KnowledgeNode?> UpdateAsync(Guid id, Guid nodeTypeId, string canonicalName, string? description)
+    public async Task<KnowledgeNode?> UpdateAsync(KnowledgeNode knowledgeNode)
     {
-        var knowledgeNode = await _repository.GetByIdAsync(id);
-        if (knowledgeNode is null) return null;
+        var existing = await _repository.GetByIdAsync(knowledgeNode.Id);
+        if (existing is null) return null;
 
-        Validate(nodeTypeId, canonicalName);
+        Validate(knowledgeNode.NodeTypeId, knowledgeNode.CanonicalName);
 
-        knowledgeNode.NodeTypeId = nodeTypeId;
-        knowledgeNode.CanonicalName = canonicalName;
-        knowledgeNode.Description = description;
+        existing.NodeTypeId = knowledgeNode.NodeTypeId;
+        existing.CanonicalName = knowledgeNode.CanonicalName;
+        existing.Description = knowledgeNode.Description;
         await SaveChangesAsync();
-        return knowledgeNode;
+        return existing;
     }
 
     public async Task<bool> DeleteAsync(Guid id)

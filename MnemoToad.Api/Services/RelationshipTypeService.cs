@@ -19,34 +19,27 @@ public class RelationshipTypeService : IRelationshipTypeService
 
     public Task<RelationshipType?> GetByIdAsync(Guid id) => _repository.GetByIdAsync(id);
 
-    public async Task<RelationshipType> CreateAsync(string name, string? inverseName, string? description)
+    public async Task<RelationshipType> CreateAsync(RelationshipType relationshipType)
     {
-        Validate(name);
+        Validate(relationshipType.Name);
 
-        var relationshipType = new RelationshipType
-        {
-            Id = Guid.NewGuid(),
-            Name = name,
-            InverseName = inverseName,
-            Description = description
-        };
         await _repository.AddAsync(relationshipType);
         await SaveChangesAsync();
         return relationshipType;
     }
 
-    public async Task<RelationshipType?> UpdateAsync(Guid id, string name, string? inverseName, string? description)
+    public async Task<RelationshipType?> UpdateAsync(RelationshipType relationshipType)
     {
-        var relationshipType = await _repository.GetByIdAsync(id);
-        if (relationshipType is null) return null;
+        var existing = await _repository.GetByIdAsync(relationshipType.Id);
+        if (existing is null) return null;
 
-        Validate(name);
+        Validate(relationshipType.Name);
 
-        relationshipType.Name = name;
-        relationshipType.InverseName = inverseName;
-        relationshipType.Description = description;
+        existing.Name = relationshipType.Name;
+        existing.InverseName = relationshipType.InverseName;
+        existing.Description = relationshipType.Description;
         await SaveChangesAsync();
-        return relationshipType;
+        return existing;
     }
 
     public async Task<bool> DeleteAsync(Guid id)

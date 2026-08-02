@@ -19,35 +19,34 @@ public class NodeTypeService : INodeTypeService
 
     public Task<NodeType?> GetByIdAsync(Guid id) => _repository.GetByIdAsync(id);
 
-    public async Task<NodeType> CreateAsync(string name, string? description)
+    public async Task<NodeType> CreateAsync(NodeType nodeType)
     {
-        if (string.IsNullOrWhiteSpace(name))
+        if (string.IsNullOrWhiteSpace(nodeType.Name))
             throw new ValidationException("Name is required.");
 
-        if (await _repository.ExistsWithNameAsync(name))
-            throw new ValidationException($"A NodeType named '{name}' already exists.");
+        if (await _repository.ExistsWithNameAsync(nodeType.Name))
+            throw new ValidationException($"A NodeType named '{nodeType.Name}' already exists.");
 
-        var nodeType = new NodeType { Id = Guid.NewGuid(), Name = name, Description = description };
         await _repository.AddAsync(nodeType);
         await _repository.SaveChangesAsync();
         return nodeType;
     }
 
-    public async Task<NodeType?> UpdateAsync(Guid id, string name, string? description)
+    public async Task<NodeType?> UpdateAsync(NodeType nodeType)
     {
-        var nodeType = await _repository.GetByIdAsync(id);
-        if (nodeType is null) return null;
+        var existing = await _repository.GetByIdAsync(nodeType.Id);
+        if (existing is null) return null;
 
-        if (string.IsNullOrWhiteSpace(name))
+        if (string.IsNullOrWhiteSpace(nodeType.Name))
             throw new ValidationException("Name is required.");
 
-        if (await _repository.ExistsWithNameAsync(name, id))
-            throw new ValidationException($"A NodeType named '{name}' already exists.");
+        if (await _repository.ExistsWithNameAsync(nodeType.Name, nodeType.Id))
+            throw new ValidationException($"A NodeType named '{nodeType.Name}' already exists.");
 
-        nodeType.Name = name;
-        nodeType.Description = description;
+        existing.Name = nodeType.Name;
+        existing.Description = nodeType.Description;
         await _repository.SaveChangesAsync();
-        return nodeType;
+        return existing;
     }
 
     public async Task<bool> DeleteAsync(Guid id)

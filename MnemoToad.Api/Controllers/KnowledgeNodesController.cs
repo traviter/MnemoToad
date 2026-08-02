@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using MnemoToad.Api.Contracts;
 using MnemoToad.Api.Services;
+using MnemoToad.Data.Entities;
 using System.ComponentModel.DataAnnotations;
 
 namespace MnemoToad.Api.Controllers;
@@ -29,7 +30,12 @@ public class KnowledgeNodesController : ControllerBase
     {
         try
         {
-            var created = await _service.CreateAsync(request.NodeTypeId, request.CanonicalName, request.Description);
+            var created = await _service.CreateAsync(new KnowledgeNode
+            {
+                NodeTypeId = request.NodeTypeId,
+                CanonicalName = request.CanonicalName,
+                Description = request.Description
+            });
             return Created($"/nodes/{created.Id}", created);
         }
         catch (ValidationException ex)
@@ -43,7 +49,13 @@ public class KnowledgeNodesController : ControllerBase
     {
         try
         {
-            var updated = await _service.UpdateAsync(id, request.NodeTypeId, request.CanonicalName, request.Description);
+            var updated = await _service.UpdateAsync(new KnowledgeNode
+            {
+                Id = id,
+                NodeTypeId = request.NodeTypeId,
+                CanonicalName = request.CanonicalName,
+                Description = request.Description
+            });
             return updated is not null ? Ok(updated) : NotFound();
         }
         catch (ValidationException ex)

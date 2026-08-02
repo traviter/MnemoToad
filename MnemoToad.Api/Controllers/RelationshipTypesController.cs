@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using MnemoToad.Api.Contracts;
 using MnemoToad.Api.Services;
+using MnemoToad.Data.Entities;
 using System.ComponentModel.DataAnnotations;
 
 namespace MnemoToad.Api.Controllers;
@@ -29,7 +30,12 @@ public class RelationshipTypesController : ControllerBase
     {
         try
         {
-            var created = await _service.CreateAsync(request.Name, request.InverseName, request.Description);
+            var created = await _service.CreateAsync(new RelationshipType
+            {
+                Name = request.Name,
+                InverseName = request.InverseName,
+                Description = request.Description
+            });
             return Created($"/relationshipTypes/{created.Id}", created);
         }
         catch (ValidationException ex)
@@ -43,7 +49,13 @@ public class RelationshipTypesController : ControllerBase
     {
         try
         {
-            var updated = await _service.UpdateAsync(id, request.Name, request.InverseName, request.Description);
+            var updated = await _service.UpdateAsync(new RelationshipType
+            {
+                Id = id,
+                Name = request.Name,
+                InverseName = request.InverseName,
+                Description = request.Description
+            });
             return updated is not null ? Ok(updated) : NotFound();
         }
         catch (ValidationException ex)
