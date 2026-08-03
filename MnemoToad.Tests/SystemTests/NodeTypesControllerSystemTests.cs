@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using MnemoToad.Api.Contracts;
 using MnemoToad.Data.Entities;
 using MnemoToad.Tests.TestSupport;
@@ -95,14 +96,14 @@ public class NodeTypesControllerSystemTests
         var deleteResponse = await _client.DeleteAsync($"/nodeTypes/{nodeType.Id}");
 
         Assert.That(deleteResponse.StatusCode, Is.EqualTo(HttpStatusCode.NoContent));
-        Assert.That(await _factory.Db.NodeType.FindAsync(nodeType.Id), Is.Null);
+        Assert.That(await _factory.Db.NodeType.AsNoTracking().FirstOrDefaultAsync(n => n.Id == nodeType.Id), Is.Null);
     }
 
     [Test]
     public async Task Delete_WhenRepositoryHitsForeignKeyViolation_Returns400()
     {
         var nodeType = await _factory.Db.CreateNodeTypeAsync();
-        _factory.Db.ThrowOnSaveChanges(PostgresExceptionFactory.ForeignKeyViolation());
+        _factory.Db.ThrowOnExecuteDelete<NodeType>(PostgresExceptionFactory.ForeignKeyViolation());
 
         var response = await _client.DeleteAsync($"/nodeTypes/{nodeType.Id}");
 

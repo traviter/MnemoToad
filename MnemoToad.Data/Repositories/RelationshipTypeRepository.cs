@@ -41,12 +41,18 @@ public class RelationshipTypeRepository : IRelationshipTypeRepository
 
     public async Task<bool> DeleteAsync(Guid id)
     {
-        var relationshipType = await GetByIdAsync(id);
-        if (relationshipType is null) return false;
-
-        _db.RelationshipType.Remove(relationshipType);
-        await SaveChangesAsync();
-        return true;
+        try
+        {
+            return await _db.ExecuteDeleteAsync(_db.RelationshipType.Where(r => r.Id == id)) > 0;
+        }
+        catch (DbUpdateException ex) when (ex.InnerException is PostgresException
+        {
+            SqlState: PostgresErrorCodes.ForeignKeyViolation,
+            TableName: "knowledge_relation"
+        })
+        {
+            throw new ValidationException("The RelationshipType cannot be deleted because it is referenced by one or more KnowledgeRelations.");
+        }
     }
 
     private async Task SaveChangesAsync()
@@ -61,14 +67,6 @@ public class RelationshipTypeRepository : IRelationshipTypeRepository
         })
         {
             throw new ValidationException("A RelationshipType with that name already exists.");
-        }
-        catch (DbUpdateException ex) when (ex.InnerException is PostgresException
-        {
-            SqlState: PostgresErrorCodes.ForeignKeyViolation,
-            TableName: "knowledge_relation"
-        })
-        {
-            throw new ValidationException("The RelationshipType cannot be deleted because it is referenced by one or more KnowledgeRelations.");
         }
     }
 }

@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using MnemoToad.Api.Contracts;
 using MnemoToad.Data.Entities;
 using MnemoToad.Tests.TestSupport;
@@ -98,14 +99,14 @@ public class RelationshipTypesControllerSystemTests
         var deleteResponse = await _client.DeleteAsync($"/relationshipTypes/{relationshipType.Id}");
 
         Assert.That(deleteResponse.StatusCode, Is.EqualTo(HttpStatusCode.NoContent));
-        Assert.That(await _factory.Db.RelationshipType.FindAsync(relationshipType.Id), Is.Null);
+        Assert.That(await _factory.Db.RelationshipType.AsNoTracking().FirstOrDefaultAsync(r => r.Id == relationshipType.Id), Is.Null);
     }
 
     [Test]
     public async Task Delete_WhenRepositoryHitsForeignKeyViolation_Returns400()
     {
         var relationshipType = await _factory.Db.CreateRelationshipTypeAsync();
-        _factory.Db.ThrowOnSaveChanges(PostgresExceptionFactory.ForeignKeyViolation(tableName: "knowledge_relation"));
+        _factory.Db.ThrowOnExecuteDelete<RelationshipType>(PostgresExceptionFactory.ForeignKeyViolation(tableName: "knowledge_relation"));
 
         var response = await _client.DeleteAsync($"/relationshipTypes/{relationshipType.Id}");
 

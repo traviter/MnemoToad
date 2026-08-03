@@ -1,3 +1,4 @@
+using Microsoft.EntityFrameworkCore;
 using MnemoToad.Data.Entities;
 using MnemoToad.Data.Repositories;
 using MnemoToad.Tests.TestSupport;
@@ -111,7 +112,7 @@ public class KnowledgeNodeRepositoryTests
         var result = await _repository.DeleteAsync(knowledgeNode.Id);
 
         Assert.That(result, Is.True);
-        Assert.That(await _db.KnowledgeNode.FindAsync(knowledgeNode.Id), Is.Null);
+        Assert.That(await _db.KnowledgeNode.AsNoTracking().FirstOrDefaultAsync(n => n.Id == knowledgeNode.Id), Is.Null);
     }
 
     [Test]
@@ -150,7 +151,7 @@ public class KnowledgeNodeRepositoryTests
         var knowledgeNode = new KnowledgeNode { Id = Guid.NewGuid(), CanonicalName = "Mercury" };
         await _db.KnowledgeNode.AddAsync(knowledgeNode);
         await _db.SaveChangesAsync();
-        _db.ThrowOnSaveChanges(PostgresExceptionFactory.ForeignKeyViolation(tableName: "knowledge_relation"));
+        _db.ThrowOnExecuteDelete<KnowledgeNode>(PostgresExceptionFactory.ForeignKeyViolation(tableName: "knowledge_relation"));
 
         var ex = Assert.ThrowsAsync<ValidationException>(() => _repository.DeleteAsync(knowledgeNode.Id));
 

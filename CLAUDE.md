@@ -206,9 +206,15 @@
   fetch → mutate → save unit of work itself (`SaveChangesAsync` became `private`), and controllers now
   depend on the repository interfaces directly. `KnowledgeRelationRepository` has no `UpdateAsync`
   (relations were never updatable) and dropped `GetByIdAsync` from its public interface (inlined into
-  `DeleteAsync`, since nothing else needed it). True repository-level efficiency (e.g.
-  `ExecuteDeleteAsync` instead of fetch-then-remove, or an "update where" approach, plus whatever
-  concurrency/locking questions that raises) is a deliberately deferred follow-up, not done yet.
+  `DeleteAsync`, since nothing else needed it). **`DeleteAsync` on all four repositories was later
+  collapsed further, from fetch-then-remove-then-save (a `SELECT` round-trip plus a
+  `SaveChangesAsync` round-trip) to a single `_db.ExecuteDeleteAsync(_db.<Set>.Where(x => x.Id ==
+  id))` call** — one DELETE statement, no fetch first. No `.Take(1)`/"limit 1" guard was added:
+  `ExecuteDelete`/`ExecuteUpdate` don't allow `Take`/`Skip`/`OrderBy` at all (EF throws if you try),
+  and since the predicate is always equality on the `Guid` PK, at most one row can ever match anyway.
+  See "Testing" below for how this bypasses `SaveChangesAsync` (and what that meant for constraint-
+  violation catches and for the test double). An "update where"-style approach for `UpdateAsync` is
+  still a deliberately deferred follow-up (see below), not done yet.
 - Controller actions catch `ValidationException` (thrown by the repository — see
   "Constraint-violation translation" below) and return
   `Problem(detail: ex.Message, statusCode: StatusCodes.Status400BadRequest)`, an RFC 7807
@@ -243,6 +249,23 @@
   `ValidationException` here isn't the "business/validation logic" `MnemoToad.Data` is otherwise kept
   free of (see "Solution layout" above) — there's no rule being evaluated, just a known DB constraint
   failure translated into the vocabulary the controller already understands.
+- **Delete-time FK-violation catches live in `DeleteAsync` itself, not in the shared
+  `SaveChangesAsync()` wrapper** — a consequence of `DeleteAsync` no longer calling
+  `SaveChangesAsync()` at all (see the `ExecuteDeleteAsync` bullet above). `NodeTypeRepository`'s FK
+  catch (it has no FKs of its own, so any FK violation on it can only be a delete being blocked by a
+  referencing `KnowledgeNode`) and `RelationshipTypeRepository`'s (`TableName: "knowledge_relation"`)
+  moved there wholesale. `KnowledgeNodeRepository` is the one split case: `TableName: "knowledge_node"`
+  (an invalid `NodeTypeId` on a write) stays in `SaveChangesAsync()` since that's still a create/update
+  concern, while `TableName: "knowledge_relation"` (deleting a still-referenced `KnowledgeNode`) moved
+  to `DeleteAsync`. `KnowledgeRelationRepository.DeleteAsync` has no catch at all, unchanged — nothing
+  references a `KnowledgeRelation`, so its delete still can't violate a constraint.
+  `IAppDbContext.ExecuteDeleteAsync<TEntity>(IQueryable<TEntity> query)` is what makes this
+  catchable at all: `AppDbContext`'s implementation catches a raw `Npgsql.PostgresException` (that's
+  what a Postgres-backed `ExecuteDeleteAsync()` throws — unlike `SaveChangesAsync()`, it does not wrap
+  failures in `DbUpdateException`, since it bypasses the change-tracker/update pipeline entirely) and
+  rethrows it wrapped in `DbUpdateException`, purely to keep the exception shape identical to what
+  `SaveChangesAsync()` throws — so repositories' existing `catch (DbUpdateException ex) when
+  (ex.InnerException is PostgresException {...})` pattern didn't need to change shape, only location.
 - **`KnowledgeNode.CanonicalName` is unique per `NodeType`, not globally unique** — the same name can
   exist under different types (e.g. "Mercury" the planet vs. the element vs. Freddie Mercury are
   legitimately separate nodes, since each has a different `NodeTypeId`), but two nodes can't share
@@ -306,9 +329,19 @@
     `Detail`, matching what the controller actually returns (`Problem(...)`).
   - **Repository tests** (`MnemoToad.Tests/Repositories/`) exist for all four entities
     (`NodeTypeRepositoryTests`, `KnowledgeNodeRepositoryTests`, `RelationshipTypeRepositoryTests`,
-    `KnowledgeRelationRepositoryTests`) and run query/CRUD assertions against a real EF Core InMemory
-    database, with constraint violations simulated separately (see `MockableAppDbContext` below) —
-    this is the layer where the "let the DB decide" collapse described above actually gets exercised.
+    `KnowledgeRelationRepositoryTests`) and run query/CRUD assertions against a real EF Core SQLite
+    (`DataSource=:memory:`) database, with constraint violations simulated separately (see
+    `MockableAppDbContext` below) — this is the layer where the "let the DB decide" collapse
+    described above actually gets exercised. **This was EF Core's InMemory provider until
+    `DeleteAsync` switched to `ExecuteDeleteAsync` (see "API patterns" above)** — InMemory doesn't
+    support `ExecuteDelete`/`ExecuteUpdate` at all (throws at runtime), while SQLite is a real
+    relational provider and translates them to actual `DELETE`/`UPDATE` SQL. Note this doesn't buy
+    *real* constraint enforcement in tests either way: `AppDbContext` has no `OnModelCreating` at
+    all (no Fluent API, no navigation properties, no `[Index]` attributes) — every DB constraint
+    (unique indexes, FKs) lives purely in the DbUp SQL scripts, never in the EF model, by design (see
+    "Database" above). So constraint violations are still always simulated via
+    `MockableAppDbContext`/`PostgresExceptionFactory`, exactly as before; the provider switch is
+    purely so `ExecuteDelete`/`ExecuteUpdate` don't throw on the happy path.
   - **System tests** (`MnemoToad.Tests/SystemTests/`) send real HTTP requests through the full app
     pipeline via `WebApplicationFactory<Program>` — see below.
 - `[SetUp]` creates a fresh mock/context/factory per test (not shared/static state), so tests can't
@@ -316,24 +349,45 @@
 - **`MockableAppDbContext`** (`MnemoToad.Tests/TestSupport/MockableAppDbContext.cs`) is what makes
   repository (and system) tests possible without a real Postgres instance. It implements
   `IAppDbContext` as a decorator: the four `DbSet<T>` properties forward straight to a wrapped
-  `IAppDbContext` (defaulting to a real `AppDbContext` on the EF Core InMemory provider, via
-  `InMemoryAppDbContext.Create()`, but swappable via its constructor), while `SaveChangesAsync()`
-  routes through an internal `Mock<IAppDbContext>` that by default just forwards to the same wrapped
-  context (`.Setup(db => db.SaveChangesAsync()).Returns(() => _wrapped.SaveChangesAsync())`). A test
-  simulating a Postgres constraint violation calls `.ThrowOnSaveChanges(exception)`, which
-  re-`Setup()`s just that one call (last `Setup` wins) — everything else (real LINQ/async-LINQ
+  `IAppDbContext` (defaulting to a real `AppDbContext` on SQLite `:memory:`, via
+  `SqliteAppDbContext.Create()` — which also hands back the open `SqliteConnection` so
+  `MockableAppDbContext.Dispose()` can close it, since a SQLite in-memory database is destroyed the
+  moment its connection closes, but swappable via its constructor), while `SaveChangesAsync()` and
+  `ExecuteDeleteAsync<TEntity>()` each route through an internal `Mock<IAppDbContext>` that by
+  default just forwards to the same wrapped context (e.g.
+  `.Setup(db => db.SaveChangesAsync()).Returns(() => _wrapped.SaveChangesAsync())`). A test
+  simulating a Postgres constraint violation on create/update calls `.ThrowOnSaveChanges(exception)`;
+  one on delete calls `.ThrowOnExecuteDelete<TEntity>(exception)` (needs the closed generic type,
+  since `ExecuteDeleteAsync<TEntity>` is generic and Moq setups are per closed type — the four
+  `DbSet`-shaped default forwards in the constructor are set up the same way, once per entity type).
+  Either re-`Setup()`s just that one call (last `Setup` wins) — everything else (real LINQ/async-LINQ
   execution, which Moq can't fake without an actual query provider behind it) keeps working
   unmodified. A repository test's `[SetUp]` is just
   `_db = new MockableAppDbContext(); _repository = new NodeTypeRepository(_db);` — no separate mock
-  setup needed for the happy-path tests at all.
+  setup needed for the happy-path tests at all. `MnemoToad.Tests.csproj` pins
+  `SQLitePCLRaw.bundle_e_sqlite3` to `3.0.5` explicitly — the version `Microsoft.EntityFrameworkCore.
+  Sqlite` 10.0.10 pulls transitively (`2.1.11`) has a known high-severity advisory
+  (`GHSA-2m69-gcr7-jv3q`).
+- **A post-delete assertion in a test must query with `.AsNoTracking()`, not `FindAsync`.**
+  `ExecuteDeleteAsync` bypasses the change tracker entirely (it's a direct SQL `DELETE`, not a
+  tracked-entity removal), so an entity added earlier in the same test via `_db.NodeType.AddAsync(...)`
+  stays cached in the context's tracker as `Unchanged` even after the row is really gone —
+  `DbSet<T>.FindAsync` checks the tracker first and returns that stale cached instance without
+  re-querying, making a real deletion look like it silently failed. `.AsNoTracking().FirstOrDefaultAsync(...)`
+  forces an actual query against the database instead. This only bites tests (a single `AppDbContext`
+  instance living across setup + act + assert in one test, or across a whole `MockedDbWebApplicationFactory`
+  test since it's registered `AddSingleton` — see below); production controllers never re-fetch an
+  entity they just deleted within the same request.
 - **`PostgresExceptionFactory`** (`MnemoToad.Tests/TestSupport/PostgresExceptionFactory.cs`) builds
-  the exact `DbUpdateException(PostgresException)` shape a repository's `SaveChangesAsync` catches —
-  `UniqueViolation(tableName:, constraintName:)` / `ForeignKeyViolation(tableName:, constraintName:)`
-  return the `DbUpdateException` ready to throw directly, since every caller needed that exact
-  wrapping anyway. `KnowledgeRelationRepository` needs `constraintName` to disambiguate its three FKs;
-  `KnowledgeNodeRepository`/`RelationshipTypeRepository` need `tableName` to disambiguate a
-  delete-time violation (referenced by a `KnowledgeRelation`) from a create-time one (see
-  "Constraint-violation translation" above).
+  the exact `DbUpdateException(PostgresException)` shape a repository's `SaveChangesAsync`/
+  `ExecuteDeleteAsync` catches — `UniqueViolation(tableName:, constraintName:)` /
+  `ForeignKeyViolation(tableName:, constraintName:)` return the `DbUpdateException` ready to throw
+  directly, since every caller needed that exact wrapping anyway (this is also why `AppDbContext.
+  ExecuteDeleteAsync` wraps the raw `PostgresException` it actually gets from Postgres into a
+  `DbUpdateException` itself — so the real and simulated shapes match). `KnowledgeRelationRepository`
+  needs `constraintName` to disambiguate its three FKs; `KnowledgeNodeRepository`/
+  `RelationshipTypeRepository` need `tableName` to disambiguate a delete-time violation (referenced
+  by a `KnowledgeRelation`) from a create-time one (see "Constraint-violation translation" above).
 - **System tests** (`MnemoToad.Tests/SystemTests/`) exist for all four controllers
   (`NodeTypesControllerSystemTests`, `KnowledgeNodesControllerSystemTests`,
   `RelationshipTypesControllerSystemTests`, `KnowledgeRelationsControllerSystemTests`) and send real
@@ -348,7 +402,8 @@
   - **`MockedDbWebApplicationFactory`**
     (`MnemoToad.Tests/TestSupport/MockedDbWebApplicationFactory.cs`) is a `WebApplicationFactory<Program>`
     that overrides only `IAppDbContext` in `ConfigureWebHost`, pointing it at a `MockableAppDbContext`
-    (exposed as `.Db`, so tests can call `.Db.ThrowOnSaveChanges(...)`) — routing, DataAnnotations
+    (exposed as `.Db`, so tests can call `.Db.ThrowOnSaveChanges(...)`/`.Db.ThrowOnExecuteDelete<T>(...)`)
+    — routing, DataAnnotations
     validation, controllers, and JSON serialization are all the real thing. **It registers
     `IAppDbContext` as `AddSingleton`, not `AddScoped`** — ASP.NET Core creates a new DI scope per
     HTTP request and disposes scoped disposables when that scope ends, so registering it `AddScoped`

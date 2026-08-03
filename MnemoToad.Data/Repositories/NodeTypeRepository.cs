@@ -40,12 +40,17 @@ public class NodeTypeRepository : INodeTypeRepository
 
     public async Task<bool> DeleteAsync(Guid id)
     {
-        var nodeType = await GetByIdAsync(id);
-        if (nodeType is null) return false;
-
-        _db.NodeType.Remove(nodeType);
-        await SaveChangesAsync();
-        return true;
+        try
+        {
+            return await _db.ExecuteDeleteAsync(_db.NodeType.Where(n => n.Id == id)) > 0;
+        }
+        catch (DbUpdateException ex) when (ex.InnerException is PostgresException
+        {
+            SqlState: PostgresErrorCodes.ForeignKeyViolation
+        })
+        {
+            throw new ValidationException("The NodeType cannot be deleted because it is referenced by one or more KnowledgeNodes.");
+        }
     }
 
     private async Task SaveChangesAsync()
@@ -60,13 +65,6 @@ public class NodeTypeRepository : INodeTypeRepository
         })
         {
             throw new ValidationException("A NodeType with that name already exists.");
-        }
-        catch (DbUpdateException ex) when (ex.InnerException is PostgresException
-        {
-            SqlState: PostgresErrorCodes.ForeignKeyViolation
-        })
-        {
-            throw new ValidationException("The NodeType cannot be deleted because it is referenced by one or more KnowledgeNodes.");
         }
     }
 }

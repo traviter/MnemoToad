@@ -1,3 +1,4 @@
+using Microsoft.EntityFrameworkCore;
 using MnemoToad.Data.Entities;
 using MnemoToad.Data.Repositories;
 using MnemoToad.Tests.TestSupport;
@@ -104,7 +105,7 @@ public class RelationshipTypeRepositoryTests
         var result = await _repository.DeleteAsync(relationshipType.Id);
 
         Assert.That(result, Is.True);
-        Assert.That(await _db.RelationshipType.FindAsync(relationshipType.Id), Is.Null);
+        Assert.That(await _db.RelationshipType.AsNoTracking().FirstOrDefaultAsync(r => r.Id == relationshipType.Id), Is.Null);
     }
 
     [Test]
@@ -132,7 +133,7 @@ public class RelationshipTypeRepositoryTests
         var relationshipType = new RelationshipType { Id = Guid.NewGuid(), Name = "parentOf" };
         await _db.RelationshipType.AddAsync(relationshipType);
         await _db.SaveChangesAsync();
-        _db.ThrowOnSaveChanges(PostgresExceptionFactory.ForeignKeyViolation(tableName: "knowledge_relation"));
+        _db.ThrowOnExecuteDelete<RelationshipType>(PostgresExceptionFactory.ForeignKeyViolation(tableName: "knowledge_relation"));
 
         var ex = Assert.ThrowsAsync<ValidationException>(() => _repository.DeleteAsync(relationshipType.Id));
 

@@ -47,12 +47,18 @@ public class KnowledgeNodeRepository : IKnowledgeNodeRepository
 
     public async Task<bool> DeleteAsync(Guid id)
     {
-        var knowledgeNode = await GetByIdAsync(id);
-        if (knowledgeNode is null) return false;
-
-        _db.KnowledgeNode.Remove(knowledgeNode);
-        await SaveChangesAsync();
-        return true;
+        try
+        {
+            return await _db.ExecuteDeleteAsync(_db.KnowledgeNode.Where(n => n.Id == id)) > 0;
+        }
+        catch (DbUpdateException ex) when (ex.InnerException is PostgresException
+        {
+            SqlState: PostgresErrorCodes.ForeignKeyViolation,
+            TableName: "knowledge_relation"
+        })
+        {
+            throw new ValidationException("The KnowledgeNode cannot be deleted because it is referenced by one or more KnowledgeRelations.");
+        }
     }
 
     private async Task SaveChangesAsync()
@@ -75,14 +81,6 @@ public class KnowledgeNodeRepository : IKnowledgeNodeRepository
         })
         {
             throw new ValidationException("The specified NodeType does not exist.");
-        }
-        catch (DbUpdateException ex) when (ex.InnerException is PostgresException
-        {
-            SqlState: PostgresErrorCodes.ForeignKeyViolation,
-            TableName: "knowledge_relation"
-        })
-        {
-            throw new ValidationException("The KnowledgeNode cannot be deleted because it is referenced by one or more KnowledgeRelations.");
         }
     }
 }

@@ -1,3 +1,4 @@
+using Microsoft.EntityFrameworkCore;
 using MnemoToad.Data.Entities;
 using MnemoToad.Data.Repositories;
 using MnemoToad.Tests.TestSupport;
@@ -58,7 +59,7 @@ public class KnowledgeRelationRepositoryTests
         var result = await _repository.DeleteAsync(knowledgeRelation.Id);
 
         Assert.That(result, Is.True);
-        Assert.That(await _db.KnowledgeRelation.FindAsync(knowledgeRelation.Id), Is.Null);
+        Assert.That(await _db.KnowledgeRelation.AsNoTracking().FirstOrDefaultAsync(r => r.Id == knowledgeRelation.Id), Is.Null);
     }
 
     [Test]

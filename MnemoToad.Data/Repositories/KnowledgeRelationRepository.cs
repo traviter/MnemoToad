@@ -26,15 +26,8 @@ public class KnowledgeRelationRepository : IKnowledgeRelationRepository
         return knowledgeRelation;
     }
 
-    public async Task<bool> DeleteAsync(Guid id)
-    {
-        var knowledgeRelation = await _db.KnowledgeRelation.FindAsync(id);
-        if (knowledgeRelation is null) return false;
-
-        _db.KnowledgeRelation.Remove(knowledgeRelation);
-        await SaveChangesAsync();
-        return true;
-    }
+    public async Task<bool> DeleteAsync(Guid id) =>
+        await _db.ExecuteDeleteAsync(_db.KnowledgeRelation.Where(r => r.Id == id)) > 0;
 
     private async Task SaveChangesAsync()
     {

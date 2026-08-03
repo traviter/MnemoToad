@@ -1,3 +1,4 @@
+using Microsoft.EntityFrameworkCore;
 using MnemoToad.Data.Entities;
 using MnemoToad.Data.Repositories;
 using MnemoToad.Tests.TestSupport;
@@ -111,7 +112,7 @@ public class NodeTypeRepositoryTests
         var result = await _repository.DeleteAsync(nodeType.Id);
 
         Assert.That(result, Is.True);
-        Assert.That(await _db.NodeType.FindAsync(nodeType.Id), Is.Null);
+        Assert.That(await _db.NodeType.AsNoTracking().FirstOrDefaultAsync(n => n.Id == nodeType.Id), Is.Null);
     }
 
     [Test]
@@ -139,7 +140,7 @@ public class NodeTypeRepositoryTests
         var nodeType = new NodeType { Id = Guid.NewGuid(), Name = "Person" };
         await _db.NodeType.AddAsync(nodeType);
         await _db.SaveChangesAsync();
-        _db.ThrowOnSaveChanges(PostgresExceptionFactory.ForeignKeyViolation());
+        _db.ThrowOnExecuteDelete<NodeType>(PostgresExceptionFactory.ForeignKeyViolation());
 
         var ex = Assert.ThrowsAsync<ValidationException>(() => _repository.DeleteAsync(nodeType.Id));
 

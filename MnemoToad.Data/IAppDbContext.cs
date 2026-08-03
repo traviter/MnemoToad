@@ -11,4 +11,5 @@ public interface IAppDbContext : IDisposable
     DbSet<KnowledgeRelation> KnowledgeRelation { get; }
 
     Task<int> SaveChangesAsync();
+    Task<int> ExecuteDeleteAsync<TEntity>(IQueryable<TEntity> query) where TEntity : class;
 }

@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using MnemoToad.Api.Contracts;
 using MnemoToad.Data.Entities;
 using MnemoToad.Tests.TestSupport;
@@ -154,7 +155,7 @@ public class KnowledgeNodesControllerSystemTests
         var deleteResponse = await _client.DeleteAsync($"/nodes/{knowledgeNode.Id}");
 
         Assert.That(deleteResponse.StatusCode, Is.EqualTo(HttpStatusCode.NoContent));
-        Assert.That(await _factory.Db.KnowledgeNode.FindAsync(knowledgeNode.Id), Is.Null);
+        Assert.That(await _factory.Db.KnowledgeNode.AsNoTracking().FirstOrDefaultAsync(n => n.Id == knowledgeNode.Id), Is.Null);
     }
 
     [Test]
@@ -162,7 +163,7 @@ public class KnowledgeNodesControllerSystemTests
     {
         var nodeType = await _factory.Db.CreateNodeTypeAsync();
         var knowledgeNode = await _factory.Db.CreateKnowledgeNodeAsync(nodeType.Id);
-        _factory.Db.ThrowOnSaveChanges(PostgresExceptionFactory.ForeignKeyViolation(tableName: "knowledge_relation"));
+        _factory.Db.ThrowOnExecuteDelete<KnowledgeNode>(PostgresExceptionFactory.ForeignKeyViolation(tableName: "knowledge_relation"));
 
         var response = await _client.DeleteAsync($"/nodes/{knowledgeNode.Id}");
 
