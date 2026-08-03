@@ -41,6 +41,3 @@ appsettings.Development.json
 appsettings.Local.json
 [Log]/
 *.log
-
-## AI breadcrumb for decisionmaking
-CLAUDE.md
