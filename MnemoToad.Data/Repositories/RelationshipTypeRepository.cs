@@ -7,9 +7,9 @@ namespace MnemoToad.Data.Repositories;
 
 public class RelationshipTypeRepository : IRelationshipTypeRepository
 {
-    private readonly AppDbContext _db;
+    private readonly IAppDbContext _db;
 
-    public RelationshipTypeRepository(AppDbContext db)
+    public RelationshipTypeRepository(IAppDbContext db)
     {
         _db = db;
     }

@@ -21,6 +21,7 @@ public static class ServiceCollectionExtensions
 
         services.AddDbContext<AppDbContext>(options =>
             options.UseNpgsql(configuration.GetConnectionString("Default")).UseSnakeCaseNamingConvention());
+        services.AddScoped<IAppDbContext>(sp => sp.GetRequiredService<AppDbContext>());
 
         services.AddScoped<INodeTypeRepository, NodeTypeRepository>();
         services.AddScoped<INodeTypeService, NodeTypeService>();

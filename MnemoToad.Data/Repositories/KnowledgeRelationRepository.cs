@@ -7,9 +7,9 @@ namespace MnemoToad.Data.Repositories;
 
 public class KnowledgeRelationRepository : IKnowledgeRelationRepository
 {
-    private readonly AppDbContext _db;
+    private readonly IAppDbContext _db;
 
-    public KnowledgeRelationRepository(AppDbContext db)
+    public KnowledgeRelationRepository(IAppDbContext db)
     {
         _db = db;
     }

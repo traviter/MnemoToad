@@ -7,9 +7,9 @@ namespace MnemoToad.Data.Repositories;
 
 public class NodeTypeRepository : INodeTypeRepository
 {
-    private readonly AppDbContext _db;
+    private readonly IAppDbContext _db;
 
-    public NodeTypeRepository(AppDbContext db)
+    public NodeTypeRepository(IAppDbContext db)
     {
         _db = db;
     }
@@ -28,11 +28,6 @@ public class NodeTypeRepository : INodeTypeRepository
 
     public void Remove(NodeType nodeType) => _db.NodeType.Remove(nodeType);
 
-    // Name uniqueness and the FK from knowledge_node blocking delete are both enforced by DB
-    // constraints rather than pre-flighted before writing, so a violation surfaces only here.
-    // Translate just those two known constraint failures into a ValidationException (the service
-    // layer maps that to a 400); anything else (e.g. the DB being unreachable) propagates unhandled
-    // and becomes a 500.
     public async Task SaveChangesAsync()
     {
         try
