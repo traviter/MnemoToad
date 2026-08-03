@@ -2,8 +2,8 @@ using Microsoft.AspNetCore.Mvc;
 using Moq;
 using MnemoToad.Api.Contracts;
 using MnemoToad.Api.Controllers;
-using MnemoToad.Api.Services;
 using MnemoToad.Data.Entities;
+using MnemoToad.Data.Repositories;
 using NUnit.Framework;
 using System.ComponentModel.DataAnnotations;
 
@@ -12,14 +12,14 @@ namespace MnemoToad.Tests.Controllers;
 [TestFixture]
 public class KnowledgeRelationsControllerTests
 {
-    private Mock<IKnowledgeRelationService> _service = null!;
+    private Mock<IKnowledgeRelationRepository> _repository = null!;
     private KnowledgeRelationsController _controller = null!;
 
     [SetUp]
     public void SetUp()
     {
-        _service = new Mock<IKnowledgeRelationService>();
-        _controller = new KnowledgeRelationsController(_service.Object);
+        _repository = new Mock<IKnowledgeRelationRepository>();
+        _controller = new KnowledgeRelationsController(_repository.Object);
     }
 
     [Test]
@@ -27,7 +27,7 @@ public class KnowledgeRelationsControllerTests
     {
         var nodeId = Guid.NewGuid();
         var relations = new List<KnowledgeRelation> { new() { Id = Guid.NewGuid(), SourceNodeId = nodeId } };
-        _service.Setup(s => s.GetByNodeIdAsync(nodeId)).ReturnsAsync(relations);
+        _repository.Setup(r => r.GetByNodeIdAsync(nodeId)).ReturnsAsync(relations);
 
         var result = await _controller.GetByNodeId(nodeId);
 
@@ -49,8 +49,8 @@ public class KnowledgeRelationsControllerTests
             RelationshipTypeId = relationshipTypeId,
             TargetNodeId = targetNodeId
         };
-        _service.Setup(s => s.CreateAsync(It.Is<KnowledgeRelation>(r =>
-                r.SourceNodeId == sourceNodeId && r.RelationshipTypeId == relationshipTypeId && r.TargetNodeId == targetNodeId)))
+        _repository.Setup(r => r.CreateAsync(It.Is<KnowledgeRelation>(k =>
+                k.SourceNodeId == sourceNodeId && k.RelationshipTypeId == relationshipTypeId && k.TargetNodeId == targetNodeId)))
             .ReturnsAsync(created);
 
         var result = await _controller.Create(new KnowledgeRelationRequest(sourceNodeId, relationshipTypeId, targetNodeId));
@@ -62,20 +62,25 @@ public class KnowledgeRelationsControllerTests
     }
 
     [Test]
-    public async Task Create_WhenServiceThrowsValidationException_ReturnsBadRequest()
+    public async Task Create_WhenRepositoryThrowsValidationException_ReturnsProblem400()
     {
-        _service.Setup(s => s.CreateAsync(It.IsAny<KnowledgeRelation>()))
+        _repository.Setup(r => r.CreateAsync(It.IsAny<KnowledgeRelation>()))
             .ThrowsAsync(new ValidationException("The specified source KnowledgeNode does not exist."));
 
         var result = await _controller.Create(new KnowledgeRelationRequest(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid()));
 
-        Assert.That(result, Is.InstanceOf<BadRequestObjectResult>());
+        var objectResult = result as ObjectResult;
+        Assert.That(objectResult, Is.Not.Null);
+        Assert.That(objectResult!.StatusCode, Is.EqualTo(400));
+        var problem = objectResult.Value as ProblemDetails;
+        Assert.That(problem, Is.Not.Null);
+        Assert.That(problem!.Detail, Is.EqualTo("The specified source KnowledgeNode does not exist."));
     }
 
     [Test]
     public async Task Delete_WhenExists_ReturnsNoContent()
     {
-        _service.Setup(s => s.DeleteAsync(It.IsAny<Guid>())).ReturnsAsync(true);
+        _repository.Setup(r => r.DeleteAsync(It.IsAny<Guid>())).ReturnsAsync(true);
 
         var result = await _controller.Delete(Guid.NewGuid());
 
@@ -85,7 +90,7 @@ public class KnowledgeRelationsControllerTests
     [Test]
     public async Task Delete_WhenNotFound_ReturnsNotFound()
     {
-        _service.Setup(s => s.DeleteAsync(It.IsAny<Guid>())).ReturnsAsync(false);
+        _repository.Setup(r => r.DeleteAsync(It.IsAny<Guid>())).ReturnsAsync(false);
 
         var result = await _controller.Delete(Guid.NewGuid());
 

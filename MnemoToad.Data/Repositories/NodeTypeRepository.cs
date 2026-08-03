@@ -20,15 +20,35 @@ public class NodeTypeRepository : INodeTypeRepository
     public async Task<NodeType?> GetByIdAsync(Guid id) =>
         await _db.NodeType.FindAsync(id);
 
-    public Task AddAsync(NodeType nodeType)
+    public async Task<NodeType> CreateAsync(NodeType nodeType)
     {
         _db.NodeType.Add(nodeType);
-        return Task.CompletedTask;
+        await SaveChangesAsync();
+        return nodeType;
     }
 
-    public void Remove(NodeType nodeType) => _db.NodeType.Remove(nodeType);
+    public async Task<NodeType?> UpdateAsync(NodeType nodeType)
+    {
+        var existing = await GetByIdAsync(nodeType.Id);
+        if (existing is null) return null;
 
-    public async Task SaveChangesAsync()
+        existing.Name = nodeType.Name;
+        existing.Description = nodeType.Description;
+        await SaveChangesAsync();
+        return existing;
+    }
+
+    public async Task<bool> DeleteAsync(Guid id)
+    {
+        var nodeType = await GetByIdAsync(id);
+        if (nodeType is null) return false;
+
+        _db.NodeType.Remove(nodeType);
+        await SaveChangesAsync();
+        return true;
+    }
+
+    private async Task SaveChangesAsync()
     {
         try
         {

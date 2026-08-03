@@ -20,15 +20,36 @@ public class RelationshipTypeRepository : IRelationshipTypeRepository
     public async Task<RelationshipType?> GetByIdAsync(Guid id) =>
         await _db.RelationshipType.FindAsync(id);
 
-    public Task AddAsync(RelationshipType relationshipType)
+    public async Task<RelationshipType> CreateAsync(RelationshipType relationshipType)
     {
         _db.RelationshipType.Add(relationshipType);
-        return Task.CompletedTask;
+        await SaveChangesAsync();
+        return relationshipType;
     }
 
-    public void Remove(RelationshipType relationshipType) => _db.RelationshipType.Remove(relationshipType);
+    public async Task<RelationshipType?> UpdateAsync(RelationshipType relationshipType)
+    {
+        var existing = await GetByIdAsync(relationshipType.Id);
+        if (existing is null) return null;
 
-    public async Task SaveChangesAsync()
+        existing.Name = relationshipType.Name;
+        existing.InverseName = relationshipType.InverseName;
+        existing.Description = relationshipType.Description;
+        await SaveChangesAsync();
+        return existing;
+    }
+
+    public async Task<bool> DeleteAsync(Guid id)
+    {
+        var relationshipType = await GetByIdAsync(id);
+        if (relationshipType is null) return false;
+
+        _db.RelationshipType.Remove(relationshipType);
+        await SaveChangesAsync();
+        return true;
+    }
+
+    private async Task SaveChangesAsync()
     {
         try
         {

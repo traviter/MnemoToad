@@ -26,15 +26,36 @@ public class KnowledgeNodeRepository : IKnowledgeNodeRepository
     public async Task<KnowledgeNode?> GetByIdAsync(Guid id) =>
         await _db.KnowledgeNode.FindAsync(id);
 
-    public Task AddAsync(KnowledgeNode knowledgeNode)
+    public async Task<KnowledgeNode> CreateAsync(KnowledgeNode knowledgeNode)
     {
         _db.KnowledgeNode.Add(knowledgeNode);
-        return Task.CompletedTask;
+        await SaveChangesAsync();
+        return knowledgeNode;
     }
 
-    public void Remove(KnowledgeNode knowledgeNode) => _db.KnowledgeNode.Remove(knowledgeNode);
+    public async Task<KnowledgeNode?> UpdateAsync(KnowledgeNode knowledgeNode)
+    {
+        var existing = await GetByIdAsync(knowledgeNode.Id);
+        if (existing is null) return null;
 
-    public async Task SaveChangesAsync()
+        existing.NodeTypeId = knowledgeNode.NodeTypeId;
+        existing.CanonicalName = knowledgeNode.CanonicalName;
+        existing.Description = knowledgeNode.Description;
+        await SaveChangesAsync();
+        return existing;
+    }
+
+    public async Task<bool> DeleteAsync(Guid id)
+    {
+        var knowledgeNode = await GetByIdAsync(id);
+        if (knowledgeNode is null) return false;
+
+        _db.KnowledgeNode.Remove(knowledgeNode);
+        await SaveChangesAsync();
+        return true;
+    }
+
+    private async Task SaveChangesAsync()
     {
         try
         {

@@ -56,47 +56,92 @@ public class NodeTypeRepositoryTests
     }
 
     [Test]
-    public async Task AddAsync_ThenSaveChangesAsync_PersistsNodeType()
+    public async Task CreateAsync_PersistsAndReturnsNodeType()
     {
         var nodeType = new NodeType { Id = Guid.NewGuid(), Name = "Person" };
 
-        await _repository.AddAsync(nodeType);
-        await _repository.SaveChangesAsync();
+        var created = await _repository.CreateAsync(nodeType);
 
+        Assert.That(created, Is.SameAs(nodeType));
         Assert.That(await _db.NodeType.FindAsync(nodeType.Id), Is.Not.Null);
     }
 
     [Test]
-    public async Task Remove_ThenSaveChangesAsync_DeletesNodeType()
+    public async Task UpdateAsync_WhenNotFound_ReturnsNull()
     {
-        var nodeType = new NodeType { Id = Guid.NewGuid(), Name = "Person" };
-        await _db.NodeType.AddAsync(nodeType);
-        await _db.SaveChangesAsync();
+        var updated = await _repository.UpdateAsync(new NodeType { Id = Guid.NewGuid(), Name = "Person" });
 
-        _repository.Remove(nodeType);
-        await _repository.SaveChangesAsync();
-
-        Assert.That(await _db.NodeType.FindAsync(nodeType.Id), Is.Null);
+        Assert.That(updated, Is.Null);
     }
 
     [Test]
-    public async Task SaveChangesAsync_OnUniqueViolation_ThrowsValidationExceptionWithDuplicateNameMessage()
+    public async Task UpdateAsync_WithValidData_UpdatesAndReturnsNodeType()
     {
-        _db.ThrowOnSaveChanges(PostgresExceptionFactory.UniqueViolation());
-        await _repository.AddAsync(new NodeType { Id = Guid.NewGuid(), Name = "Person" });
+        var nodeType = new NodeType { Id = Guid.NewGuid(), Name = "Person", Description = "Old" };
+        await _db.NodeType.AddAsync(nodeType);
+        await _db.SaveChangesAsync();
 
-        var ex = Assert.ThrowsAsync<ValidationException>(() => _repository.SaveChangesAsync());
+        var updated = await _repository.UpdateAsync(new NodeType { Id = nodeType.Id, Name = "Person", Description = "New description" });
+
+        Assert.That(updated, Is.Not.Null);
+        Assert.That(updated!.Description, Is.EqualTo("New description"));
+    }
+
+    [Test]
+    public async Task UpdateAsync_OnUniqueViolation_ThrowsValidationExceptionWithDuplicateNameMessage()
+    {
+        var nodeType = new NodeType { Id = Guid.NewGuid(), Name = "Place" };
+        await _db.NodeType.AddAsync(nodeType);
+        await _db.SaveChangesAsync();
+        _db.ThrowOnSaveChanges(PostgresExceptionFactory.UniqueViolation());
+
+        var ex = Assert.ThrowsAsync<ValidationException>(
+            () => _repository.UpdateAsync(new NodeType { Id = nodeType.Id, Name = "Person" }));
 
         Assert.That(ex!.Message, Is.EqualTo("A NodeType with that name already exists."));
     }
 
     [Test]
-    public void SaveChangesAsync_OnForeignKeyViolation_ThrowsValidationExceptionWithReferencedMessage()
+    public async Task DeleteAsync_WhenExists_RemovesNodeTypeAndReturnsTrue()
     {
-        _db.ThrowOnSaveChanges(PostgresExceptionFactory.ForeignKeyViolation());
-        _repository.Remove(new NodeType { Id = Guid.NewGuid(), Name = "Person" });
+        var nodeType = new NodeType { Id = Guid.NewGuid(), Name = "Person" };
+        await _db.NodeType.AddAsync(nodeType);
+        await _db.SaveChangesAsync();
 
-        var ex = Assert.ThrowsAsync<ValidationException>(() => _repository.SaveChangesAsync());
+        var result = await _repository.DeleteAsync(nodeType.Id);
+
+        Assert.That(result, Is.True);
+        Assert.That(await _db.NodeType.FindAsync(nodeType.Id), Is.Null);
+    }
+
+    [Test]
+    public async Task DeleteAsync_WhenNotFound_ReturnsFalse()
+    {
+        var result = await _repository.DeleteAsync(Guid.NewGuid());
+
+        Assert.That(result, Is.False);
+    }
+
+    [Test]
+    public void CreateAsync_OnUniqueViolation_ThrowsValidationExceptionWithDuplicateNameMessage()
+    {
+        _db.ThrowOnSaveChanges(PostgresExceptionFactory.UniqueViolation());
+
+        var ex = Assert.ThrowsAsync<ValidationException>(
+            () => _repository.CreateAsync(new NodeType { Id = Guid.NewGuid(), Name = "Person" }));
+
+        Assert.That(ex!.Message, Is.EqualTo("A NodeType with that name already exists."));
+    }
+
+    [Test]
+    public async Task DeleteAsync_OnForeignKeyViolation_ThrowsValidationExceptionWithReferencedMessage()
+    {
+        var nodeType = new NodeType { Id = Guid.NewGuid(), Name = "Person" };
+        await _db.NodeType.AddAsync(nodeType);
+        await _db.SaveChangesAsync();
+        _db.ThrowOnSaveChanges(PostgresExceptionFactory.ForeignKeyViolation());
+
+        var ex = Assert.ThrowsAsync<ValidationException>(() => _repository.DeleteAsync(nodeType.Id));
 
         Assert.That(ex!.Message, Is.EqualTo("The NodeType cannot be deleted because it is referenced by one or more KnowledgeNodes."));
     }

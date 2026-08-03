@@ -1,3 +1,5 @@
+using System.ComponentModel.DataAnnotations;
+
 namespace MnemoToad.Api.Contracts;
 
-public record KnowledgeRelationRequest(Guid SourceNodeId, Guid RelationshipTypeId, Guid TargetNodeId);
+public record KnowledgeRelationRequest([RequiredGuid] Guid SourceNodeId, [RequiredGuid] Guid RelationshipTypeId, [RequiredGuid] Guid TargetNodeId);

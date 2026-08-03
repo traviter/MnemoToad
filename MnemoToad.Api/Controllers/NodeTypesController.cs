@@ -1,7 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using MnemoToad.Api.Contracts;
-using MnemoToad.Api.Services;
 using MnemoToad.Data.Entities;
+using MnemoToad.Data.Repositories;
 using System.ComponentModel.DataAnnotations;
 
 namespace MnemoToad.Api.Controllers;
@@ -10,32 +10,32 @@ namespace MnemoToad.Api.Controllers;
 [Route("nodeTypes")]
 public class NodeTypesController : ControllerBase
 {
-    private readonly INodeTypeService _service;
+    private readonly INodeTypeRepository _repository;
 
-    public NodeTypesController(INodeTypeService service)
+    public NodeTypesController(INodeTypeRepository repository)
     {
-        _service = service;
+        _repository = repository;
     }
 
     [HttpGet]
     public async Task<IActionResult> GetAll() =>
-        Ok(await _service.GetAllAsync());
+        Ok(await _repository.GetAllAsync());
 
     [HttpGet("{id:guid}")]
     public async Task<IActionResult> GetById(Guid id) =>
-        await _service.GetByIdAsync(id) is { } nodeType ? Ok(nodeType) : NotFound();
+        await _repository.GetByIdAsync(id) is { } nodeType ? Ok(nodeType) : NotFound();
 
     [HttpPost]
     public async Task<IActionResult> Create(NodeTypeRequest request)
     {
         try
         {
-            var created = await _service.CreateAsync(new NodeType { Name = request.Name, Description = request.Description });
+            var created = await _repository.CreateAsync(new NodeType { Name = request.Name, Description = request.Description });
             return Created($"/nodeTypes/{created.Id}", created);
         }
         catch (ValidationException ex)
         {
-            return BadRequest(new { error = ex.Message });
+            return Problem(detail: ex.Message, statusCode: StatusCodes.Status400BadRequest);
         }
     }
 
@@ -44,12 +44,12 @@ public class NodeTypesController : ControllerBase
     {
         try
         {
-            var updated = await _service.UpdateAsync(new NodeType { Id = id, Name = request.Name, Description = request.Description });
+            var updated = await _repository.UpdateAsync(new NodeType { Id = id, Name = request.Name, Description = request.Description });
             return updated is not null ? Ok(updated) : NotFound();
         }
         catch (ValidationException ex)
         {
-            return BadRequest(new { error = ex.Message });
+            return Problem(detail: ex.Message, statusCode: StatusCodes.Status400BadRequest);
         }
     }
 
@@ -58,11 +58,11 @@ public class NodeTypesController : ControllerBase
     {
         try
         {
-            return await _service.DeleteAsync(id) ? NoContent() : NotFound();
+            return await _repository.DeleteAsync(id) ? NoContent() : NotFound();
         }
         catch (ValidationException ex)
         {
-            return BadRequest(new { error = ex.Message });
+            return Problem(detail: ex.Message, statusCode: StatusCodes.Status400BadRequest);
         }
     }
 }

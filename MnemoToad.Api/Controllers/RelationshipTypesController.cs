@@ -1,7 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using MnemoToad.Api.Contracts;
-using MnemoToad.Api.Services;
 using MnemoToad.Data.Entities;
+using MnemoToad.Data.Repositories;
 using System.ComponentModel.DataAnnotations;
 
 namespace MnemoToad.Api.Controllers;
@@ -10,27 +10,27 @@ namespace MnemoToad.Api.Controllers;
 [Route("relationshipTypes")]
 public class RelationshipTypesController : ControllerBase
 {
-    private readonly IRelationshipTypeService _service;
+    private readonly IRelationshipTypeRepository _repository;
 
-    public RelationshipTypesController(IRelationshipTypeService service)
+    public RelationshipTypesController(IRelationshipTypeRepository repository)
     {
-        _service = service;
+        _repository = repository;
     }
 
     [HttpGet]
     public async Task<IActionResult> GetAll() =>
-        Ok(await _service.GetAllAsync());
+        Ok(await _repository.GetAllAsync());
 
     [HttpGet("{id:guid}")]
     public async Task<IActionResult> GetById(Guid id) =>
-        await _service.GetByIdAsync(id) is { } relationshipType ? Ok(relationshipType) : NotFound();
+        await _repository.GetByIdAsync(id) is { } relationshipType ? Ok(relationshipType) : NotFound();
 
     [HttpPost]
     public async Task<IActionResult> Create(RelationshipTypeRequest request)
     {
         try
         {
-            var created = await _service.CreateAsync(new RelationshipType
+            var created = await _repository.CreateAsync(new RelationshipType
             {
                 Name = request.Name,
                 InverseName = request.InverseName,
@@ -40,7 +40,7 @@ public class RelationshipTypesController : ControllerBase
         }
         catch (ValidationException ex)
         {
-            return BadRequest(new { error = ex.Message });
+            return Problem(detail: ex.Message, statusCode: StatusCodes.Status400BadRequest);
         }
     }
 
@@ -49,7 +49,7 @@ public class RelationshipTypesController : ControllerBase
     {
         try
         {
-            var updated = await _service.UpdateAsync(new RelationshipType
+            var updated = await _repository.UpdateAsync(new RelationshipType
             {
                 Id = id,
                 Name = request.Name,
@@ -60,7 +60,7 @@ public class RelationshipTypesController : ControllerBase
         }
         catch (ValidationException ex)
         {
-            return BadRequest(new { error = ex.Message });
+            return Problem(detail: ex.Message, statusCode: StatusCodes.Status400BadRequest);
         }
     }
 
@@ -69,11 +69,11 @@ public class RelationshipTypesController : ControllerBase
     {
         try
         {
-            return await _service.DeleteAsync(id) ? NoContent() : NotFound();
+            return await _repository.DeleteAsync(id) ? NoContent() : NotFound();
         }
         catch (ValidationException ex)
         {
-            return BadRequest(new { error = ex.Message });
+            return Problem(detail: ex.Message, statusCode: StatusCodes.Status400BadRequest);
         }
     }
 }

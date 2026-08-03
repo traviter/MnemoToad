@@ -6,7 +6,7 @@ public interface IRelationshipTypeRepository
 {
     Task<List<RelationshipType>> GetAllAsync();
     Task<RelationshipType?> GetByIdAsync(Guid id);
-    Task AddAsync(RelationshipType relationshipType);
-    void Remove(RelationshipType relationshipType);
-    Task SaveChangesAsync();
+    Task<RelationshipType> CreateAsync(RelationshipType relationshipType);
+    Task<RelationshipType?> UpdateAsync(RelationshipType relationshipType);
+    Task<bool> DeleteAsync(Guid id);
 }

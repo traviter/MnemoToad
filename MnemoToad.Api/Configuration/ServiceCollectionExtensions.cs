@@ -1,5 +1,4 @@
 using Microsoft.EntityFrameworkCore;
-using MnemoToad.Api.Services;
 using MnemoToad.Data;
 using MnemoToad.Data.Repositories;
 
@@ -24,13 +23,9 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IAppDbContext>(sp => sp.GetRequiredService<AppDbContext>());
 
         services.AddScoped<INodeTypeRepository, NodeTypeRepository>();
-        services.AddScoped<INodeTypeService, NodeTypeService>();
         services.AddScoped<IKnowledgeNodeRepository, KnowledgeNodeRepository>();
-        services.AddScoped<IKnowledgeNodeService, KnowledgeNodeService>();
         services.AddScoped<IRelationshipTypeRepository, RelationshipTypeRepository>();
-        services.AddScoped<IRelationshipTypeService, RelationshipTypeService>();
         services.AddScoped<IKnowledgeRelationRepository, KnowledgeRelationRepository>();
-        services.AddScoped<IKnowledgeRelationService, KnowledgeRelationService>();
 
         return services;
     }

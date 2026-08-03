@@ -2,8 +2,8 @@ using Microsoft.AspNetCore.Mvc;
 using Moq;
 using MnemoToad.Api.Contracts;
 using MnemoToad.Api.Controllers;
-using MnemoToad.Api.Services;
 using MnemoToad.Data.Entities;
+using MnemoToad.Data.Repositories;
 using NUnit.Framework;
 using System.ComponentModel.DataAnnotations;
 
@@ -12,21 +12,21 @@ namespace MnemoToad.Tests.Controllers;
 [TestFixture]
 public class NodeTypesControllerTests
 {
-    private Mock<INodeTypeService> _service = null!;
+    private Mock<INodeTypeRepository> _repository = null!;
     private NodeTypesController _controller = null!;
 
     [SetUp]
     public void SetUp()
     {
-        _service = new Mock<INodeTypeService>();
-        _controller = new NodeTypesController(_service.Object);
+        _repository = new Mock<INodeTypeRepository>();
+        _controller = new NodeTypesController(_repository.Object);
     }
 
     [Test]
     public async Task GetAll_ReturnsOkWithNodeTypes()
     {
         var nodeTypes = new List<NodeType> { new() { Id = Guid.NewGuid(), Name = "Person" } };
-        _service.Setup(s => s.GetAllAsync()).ReturnsAsync(nodeTypes);
+        _repository.Setup(r => r.GetAllAsync()).ReturnsAsync(nodeTypes);
 
         var result = await _controller.GetAll();
 
@@ -39,7 +39,7 @@ public class NodeTypesControllerTests
     public async Task GetById_WhenExists_ReturnsOkWithNodeType()
     {
         var nodeType = new NodeType { Id = Guid.NewGuid(), Name = "Person" };
-        _service.Setup(s => s.GetByIdAsync(nodeType.Id)).ReturnsAsync(nodeType);
+        _repository.Setup(r => r.GetByIdAsync(nodeType.Id)).ReturnsAsync(nodeType);
 
         var result = await _controller.GetById(nodeType.Id);
 
@@ -51,7 +51,7 @@ public class NodeTypesControllerTests
     [Test]
     public async Task GetById_WhenNotFound_ReturnsNotFound()
     {
-        _service.Setup(s => s.GetByIdAsync(It.IsAny<Guid>())).ReturnsAsync((NodeType?)null);
+        _repository.Setup(r => r.GetByIdAsync(It.IsAny<Guid>())).ReturnsAsync((NodeType?)null);
 
         var result = await _controller.GetById(Guid.NewGuid());
 
@@ -62,7 +62,7 @@ public class NodeTypesControllerTests
     public async Task Create_WithValidRequest_ReturnsCreatedWithNodeType()
     {
         var created = new NodeType { Id = Guid.NewGuid(), Name = "Person", Description = "A human being" };
-        _service.Setup(s => s.CreateAsync(It.Is<NodeType>(n => n.Name == "Person" && n.Description == "A human being")))
+        _repository.Setup(r => r.CreateAsync(It.Is<NodeType>(n => n.Name == "Person" && n.Description == "A human being")))
             .ReturnsAsync(created);
 
         var result = await _controller.Create(new NodeTypeRequest("Person", "A human being"));
@@ -74,14 +74,19 @@ public class NodeTypesControllerTests
     }
 
     [Test]
-    public async Task Create_WhenServiceThrowsValidationException_ReturnsBadRequest()
+    public async Task Create_WhenRepositoryThrowsValidationException_ReturnsProblem400()
     {
-        _service.Setup(s => s.CreateAsync(It.IsAny<NodeType>()))
+        _repository.Setup(r => r.CreateAsync(It.IsAny<NodeType>()))
             .ThrowsAsync(new ValidationException("A NodeType with that name already exists."));
 
         var result = await _controller.Create(new NodeTypeRequest("Person", null));
 
-        Assert.That(result, Is.InstanceOf<BadRequestObjectResult>());
+        var objectResult = result as ObjectResult;
+        Assert.That(objectResult, Is.Not.Null);
+        Assert.That(objectResult!.StatusCode, Is.EqualTo(400));
+        var problem = objectResult.Value as ProblemDetails;
+        Assert.That(problem, Is.Not.Null);
+        Assert.That(problem!.Detail, Is.EqualTo("A NodeType with that name already exists."));
     }
 
     [Test]
@@ -89,7 +94,7 @@ public class NodeTypesControllerTests
     {
         var id = Guid.NewGuid();
         var updated = new NodeType { Id = id, Name = "Person", Description = "New description" };
-        _service.Setup(s => s.UpdateAsync(It.Is<NodeType>(n => n.Id == id))).ReturnsAsync(updated);
+        _repository.Setup(r => r.UpdateAsync(It.Is<NodeType>(n => n.Id == id))).ReturnsAsync(updated);
 
         var result = await _controller.Update(id, new NodeTypeRequest("Person", "New description"));
 
@@ -101,7 +106,7 @@ public class NodeTypesControllerTests
     [Test]
     public async Task Update_WhenNotFound_ReturnsNotFound()
     {
-        _service.Setup(s => s.UpdateAsync(It.IsAny<NodeType>())).ReturnsAsync((NodeType?)null);
+        _repository.Setup(r => r.UpdateAsync(It.IsAny<NodeType>())).ReturnsAsync((NodeType?)null);
 
         var result = await _controller.Update(Guid.NewGuid(), new NodeTypeRequest("Person", null));
 
@@ -109,20 +114,25 @@ public class NodeTypesControllerTests
     }
 
     [Test]
-    public async Task Update_WhenServiceThrowsValidationException_ReturnsBadRequest()
+    public async Task Update_WhenRepositoryThrowsValidationException_ReturnsProblem400()
     {
-        _service.Setup(s => s.UpdateAsync(It.IsAny<NodeType>()))
+        _repository.Setup(r => r.UpdateAsync(It.IsAny<NodeType>()))
             .ThrowsAsync(new ValidationException("A NodeType with that name already exists."));
 
         var result = await _controller.Update(Guid.NewGuid(), new NodeTypeRequest("Person", null));
 
-        Assert.That(result, Is.InstanceOf<BadRequestObjectResult>());
+        var objectResult = result as ObjectResult;
+        Assert.That(objectResult, Is.Not.Null);
+        Assert.That(objectResult!.StatusCode, Is.EqualTo(400));
+        var problem = objectResult.Value as ProblemDetails;
+        Assert.That(problem, Is.Not.Null);
+        Assert.That(problem!.Detail, Is.EqualTo("A NodeType with that name already exists."));
     }
 
     [Test]
     public async Task Delete_WhenExists_ReturnsNoContent()
     {
-        _service.Setup(s => s.DeleteAsync(It.IsAny<Guid>())).ReturnsAsync(true);
+        _repository.Setup(r => r.DeleteAsync(It.IsAny<Guid>())).ReturnsAsync(true);
 
         var result = await _controller.Delete(Guid.NewGuid());
 
@@ -132,7 +142,7 @@ public class NodeTypesControllerTests
     [Test]
     public async Task Delete_WhenNotFound_ReturnsNotFound()
     {
-        _service.Setup(s => s.DeleteAsync(It.IsAny<Guid>())).ReturnsAsync(false);
+        _repository.Setup(r => r.DeleteAsync(It.IsAny<Guid>())).ReturnsAsync(false);
 
         var result = await _controller.Delete(Guid.NewGuid());
 
@@ -140,13 +150,18 @@ public class NodeTypesControllerTests
     }
 
     [Test]
-    public async Task Delete_WhenServiceThrowsValidationException_ReturnsBadRequest()
+    public async Task Delete_WhenRepositoryThrowsValidationException_ReturnsProblem400()
     {
-        _service.Setup(s => s.DeleteAsync(It.IsAny<Guid>()))
+        _repository.Setup(r => r.DeleteAsync(It.IsAny<Guid>()))
             .ThrowsAsync(new ValidationException("The NodeType cannot be deleted because it is referenced by one or more KnowledgeNodes."));
 
         var result = await _controller.Delete(Guid.NewGuid());
 
-        Assert.That(result, Is.InstanceOf<BadRequestObjectResult>());
+        var objectResult = result as ObjectResult;
+        Assert.That(objectResult, Is.Not.Null);
+        Assert.That(objectResult!.StatusCode, Is.EqualTo(400));
+        var problem = objectResult.Value as ProblemDetails;
+        Assert.That(problem, Is.Not.Null);
+        Assert.That(problem!.Detail, Is.EqualTo("The NodeType cannot be deleted because it is referenced by one or more KnowledgeNodes."));
     }
 }

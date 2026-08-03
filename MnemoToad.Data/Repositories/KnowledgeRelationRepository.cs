@@ -19,18 +19,24 @@ public class KnowledgeRelationRepository : IKnowledgeRelationRepository
             .Where(r => r.SourceNodeId == nodeId || r.TargetNodeId == nodeId)
             .ToListAsync();
 
-    public async Task<KnowledgeRelation?> GetByIdAsync(Guid id) =>
-        await _db.KnowledgeRelation.FindAsync(id);
-
-    public Task AddAsync(KnowledgeRelation knowledgeRelation)
+    public async Task<KnowledgeRelation> CreateAsync(KnowledgeRelation knowledgeRelation)
     {
         _db.KnowledgeRelation.Add(knowledgeRelation);
-        return Task.CompletedTask;
+        await SaveChangesAsync();
+        return knowledgeRelation;
     }
 
-    public void Remove(KnowledgeRelation knowledgeRelation) => _db.KnowledgeRelation.Remove(knowledgeRelation);
+    public async Task<bool> DeleteAsync(Guid id)
+    {
+        var knowledgeRelation = await _db.KnowledgeRelation.FindAsync(id);
+        if (knowledgeRelation is null) return false;
 
-    public async Task SaveChangesAsync()
+        _db.KnowledgeRelation.Remove(knowledgeRelation);
+        await SaveChangesAsync();
+        return true;
+    }
+
+    private async Task SaveChangesAsync()
     {
         try
         {

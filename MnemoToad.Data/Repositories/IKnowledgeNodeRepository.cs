@@ -6,7 +6,7 @@ public interface IKnowledgeNodeRepository
 {
     Task<List<KnowledgeNode>> GetAllAsync(Guid? nodeTypeId = null);
     Task<KnowledgeNode?> GetByIdAsync(Guid id);
-    Task AddAsync(KnowledgeNode knowledgeNode);
-    void Remove(KnowledgeNode knowledgeNode);
-    Task SaveChangesAsync();
+    Task<KnowledgeNode> CreateAsync(KnowledgeNode knowledgeNode);
+    Task<KnowledgeNode?> UpdateAsync(KnowledgeNode knowledgeNode);
+    Task<bool> DeleteAsync(Guid id);
 }

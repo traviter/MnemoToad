@@ -1,7 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using MnemoToad.Api.Contracts;
-using MnemoToad.Api.Services;
 using MnemoToad.Data.Entities;
+using MnemoToad.Data.Repositories;
 using System.ComponentModel.DataAnnotations;
 
 namespace MnemoToad.Api.Controllers;
@@ -10,27 +10,27 @@ namespace MnemoToad.Api.Controllers;
 [Route("nodes")]
 public class KnowledgeNodesController : ControllerBase
 {
-    private readonly IKnowledgeNodeService _service;
+    private readonly IKnowledgeNodeRepository _repository;
 
-    public KnowledgeNodesController(IKnowledgeNodeService service)
+    public KnowledgeNodesController(IKnowledgeNodeRepository repository)
     {
-        _service = service;
+        _repository = repository;
     }
 
     [HttpGet]
     public async Task<IActionResult> GetAll([FromQuery] Guid? nodeTypeId) =>
-        Ok(await _service.GetAllAsync(nodeTypeId));
+        Ok(await _repository.GetAllAsync(nodeTypeId));
 
     [HttpGet("{id:guid}")]
     public async Task<IActionResult> GetById(Guid id) =>
-        await _service.GetByIdAsync(id) is { } knowledgeNode ? Ok(knowledgeNode) : NotFound();
+        await _repository.GetByIdAsync(id) is { } knowledgeNode ? Ok(knowledgeNode) : NotFound();
 
     [HttpPost]
     public async Task<IActionResult> Create(KnowledgeNodeRequest request)
     {
         try
         {
-            var created = await _service.CreateAsync(new KnowledgeNode
+            var created = await _repository.CreateAsync(new KnowledgeNode
             {
                 NodeTypeId = request.NodeTypeId,
                 CanonicalName = request.CanonicalName,
@@ -40,7 +40,7 @@ public class KnowledgeNodesController : ControllerBase
         }
         catch (ValidationException ex)
         {
-            return BadRequest(new { error = ex.Message });
+            return Problem(detail: ex.Message, statusCode: StatusCodes.Status400BadRequest);
         }
     }
 
@@ -49,7 +49,7 @@ public class KnowledgeNodesController : ControllerBase
     {
         try
         {
-            var updated = await _service.UpdateAsync(new KnowledgeNode
+            var updated = await _repository.UpdateAsync(new KnowledgeNode
             {
                 Id = id,
                 NodeTypeId = request.NodeTypeId,
@@ -60,7 +60,7 @@ public class KnowledgeNodesController : ControllerBase
         }
         catch (ValidationException ex)
         {
-            return BadRequest(new { error = ex.Message });
+            return Problem(detail: ex.Message, statusCode: StatusCodes.Status400BadRequest);
         }
     }
 
@@ -69,11 +69,11 @@ public class KnowledgeNodesController : ControllerBase
     {
         try
         {
-            return await _service.DeleteAsync(id) ? NoContent() : NotFound();
+            return await _repository.DeleteAsync(id) ? NoContent() : NotFound();
         }
         catch (ValidationException ex)
         {
-            return BadRequest(new { error = ex.Message });
+            return Problem(detail: ex.Message, statusCode: StatusCodes.Status400BadRequest);
         }
     }
 }
