@@ -28,46 +28,25 @@ public class KnowledgeRelationsControllerSystemTests
         _factory.Dispose();
     }
 
-    private async Task<Guid> CreateNodeTypeAsync()
-    {
-        var response = await _client.PostAsJsonAsync("/nodeTypes", new NodeTypeRequest($"NodeType_{Guid.NewGuid()}", null));
-        var created = await response.Content.ReadFromJsonAsync<NodeType>();
-        return created!.Id;
-    }
-
-    private async Task<Guid> CreateKnowledgeNodeAsync(Guid nodeTypeId)
-    {
-        var response = await _client.PostAsJsonAsync("/nodes", new KnowledgeNodeRequest(nodeTypeId, $"Node_{Guid.NewGuid()}", null));
-        var created = await response.Content.ReadFromJsonAsync<KnowledgeNode>();
-        return created!.Id;
-    }
-
-    private async Task<Guid> CreateRelationshipTypeAsync()
-    {
-        var response = await _client.PostAsJsonAsync("/relationshipTypes", new RelationshipTypeRequest($"RelationshipType_{Guid.NewGuid()}", null, null));
-        var created = await response.Content.ReadFromJsonAsync<RelationshipType>();
-        return created!.Id;
-    }
-
     [Test]
     public async Task Create_ThenListForSourceAndTargetNode_RoundTripsThroughTheRealStack()
     {
-        var nodeTypeId = await CreateNodeTypeAsync();
-        var sourceNodeId = await CreateKnowledgeNodeAsync(nodeTypeId);
-        var targetNodeId = await CreateKnowledgeNodeAsync(nodeTypeId);
-        var relationshipTypeId = await CreateRelationshipTypeAsync();
+        var nodeType = await _factory.Db.CreateNodeTypeAsync();
+        var sourceNode = await _factory.Db.CreateKnowledgeNodeAsync(nodeType.Id);
+        var targetNode = await _factory.Db.CreateKnowledgeNodeAsync(nodeType.Id);
+        var relationshipType = await _factory.Db.CreateRelationshipTypeAsync();
 
         var createResponse = await _client.PostAsJsonAsync("/relationships",
-            new KnowledgeRelationRequest(sourceNodeId, relationshipTypeId, targetNodeId));
+            new KnowledgeRelationRequest(sourceNode.Id, relationshipType.Id, targetNode.Id));
         var created = await createResponse.Content.ReadFromJsonAsync<KnowledgeRelation>();
 
         Assert.That(createResponse.StatusCode, Is.EqualTo(HttpStatusCode.Created));
 
-        var sourceListResponse = await _client.GetAsync($"/nodes/{sourceNodeId}/relationships");
+        var sourceListResponse = await _client.GetAsync($"/nodes/{sourceNode.Id}/relationships");
         var sourceList = await sourceListResponse.Content.ReadFromJsonAsync<List<KnowledgeRelation>>();
         Assert.That(sourceList!.Select(r => r.Id), Does.Contain(created!.Id));
 
-        var targetListResponse = await _client.GetAsync($"/nodes/{targetNodeId}/relationships");
+        var targetListResponse = await _client.GetAsync($"/nodes/{targetNode.Id}/relationships");
         var targetList = await targetListResponse.Content.ReadFromJsonAsync<List<KnowledgeRelation>>();
         Assert.That(targetList!.Select(r => r.Id), Does.Contain(created.Id));
     }
@@ -138,20 +117,18 @@ public class KnowledgeRelationsControllerSystemTests
     [Test]
     public async Task Delete_WhenExists_Returns204AndRemovesItFromNodeListing()
     {
-        var nodeTypeId = await CreateNodeTypeAsync();
-        var sourceNodeId = await CreateKnowledgeNodeAsync(nodeTypeId);
-        var targetNodeId = await CreateKnowledgeNodeAsync(nodeTypeId);
-        var relationshipTypeId = await CreateRelationshipTypeAsync();
-        var createResponse = await _client.PostAsJsonAsync("/relationships",
-            new KnowledgeRelationRequest(sourceNodeId, relationshipTypeId, targetNodeId));
-        var created = await createResponse.Content.ReadFromJsonAsync<KnowledgeRelation>();
+        var nodeType = await _factory.Db.CreateNodeTypeAsync();
+        var sourceNode = await _factory.Db.CreateKnowledgeNodeAsync(nodeType.Id);
+        var targetNode = await _factory.Db.CreateKnowledgeNodeAsync(nodeType.Id);
+        var relationshipType = await _factory.Db.CreateRelationshipTypeAsync();
+        var knowledgeRelation = await _factory.Db.CreateKnowledgeRelationAsync(sourceNode.Id, relationshipType.Id, targetNode.Id);
 
-        var deleteResponse = await _client.DeleteAsync($"/relationships/{created!.Id}");
+        var deleteResponse = await _client.DeleteAsync($"/relationships/{knowledgeRelation.Id}");
 
         Assert.That(deleteResponse.StatusCode, Is.EqualTo(HttpStatusCode.NoContent));
-        var listResponse = await _client.GetAsync($"/nodes/{sourceNodeId}/relationships");
+        var listResponse = await _client.GetAsync($"/nodes/{sourceNode.Id}/relationships");
         var list = await listResponse.Content.ReadFromJsonAsync<List<KnowledgeRelation>>();
-        Assert.That(list!.Select(r => r.Id), Does.Not.Contain(created.Id));
+        Assert.That(list!.Select(r => r.Id), Does.Not.Contain(knowledgeRelation.Id));
     }
 
     [Test]

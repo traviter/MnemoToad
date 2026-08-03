@@ -28,13 +28,6 @@ public class KnowledgeNodesControllerSystemTests
         _factory.Dispose();
     }
 
-    private async Task<Guid> CreateNodeTypeAsync()
-    {
-        var response = await _client.PostAsJsonAsync("/nodeTypes", new NodeTypeRequest($"NodeType_{Guid.NewGuid()}", null));
-        var created = await response.Content.ReadFromJsonAsync<NodeType>();
-        return created!.Id;
-    }
-
     [Test]
     public async Task GetById_WhenNotFound_Returns404()
     {
@@ -46,9 +39,9 @@ public class KnowledgeNodesControllerSystemTests
     [Test]
     public async Task Create_ThenGetById_RoundTripsThroughTheRealStack()
     {
-        var nodeTypeId = await CreateNodeTypeAsync();
+        var nodeType = await _factory.Db.CreateNodeTypeAsync();
 
-        var createResponse = await _client.PostAsJsonAsync("/nodes", new KnowledgeNodeRequest(nodeTypeId, "Mercury", "The planet"));
+        var createResponse = await _client.PostAsJsonAsync("/nodes", new KnowledgeNodeRequest(nodeType.Id, "Mercury", "The planet"));
         var created = await createResponse.Content.ReadFromJsonAsync<KnowledgeNode>();
 
         var getResponse = await _client.GetAsync($"/nodes/{created!.Id}");
@@ -61,9 +54,9 @@ public class KnowledgeNodesControllerSystemTests
     [Test]
     public async Task Create_WithBlankCanonicalName_Returns400WithValidationErrors()
     {
-        var nodeTypeId = await CreateNodeTypeAsync();
+        var nodeType = await _factory.Db.CreateNodeTypeAsync();
 
-        var response = await _client.PostAsJsonAsync("/nodes", new KnowledgeNodeRequest(nodeTypeId, "", null));
+        var response = await _client.PostAsJsonAsync("/nodes", new KnowledgeNodeRequest(nodeType.Id, "", null));
 
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
         var problem = await response.Content.ReadFromJsonAsync<ValidationProblemDetails>();
@@ -83,10 +76,10 @@ public class KnowledgeNodesControllerSystemTests
     [Test]
     public async Task Create_WhenRepositoryHitsUniqueViolation_Returns400()
     {
-        var nodeTypeId = await CreateNodeTypeAsync();
+        var nodeType = await _factory.Db.CreateNodeTypeAsync();
         _factory.Db.ThrowOnSaveChanges(PostgresExceptionFactory.UniqueViolation());
 
-        var response = await _client.PostAsJsonAsync("/nodes", new KnowledgeNodeRequest(nodeTypeId, "Mercury", null));
+        var response = await _client.PostAsJsonAsync("/nodes", new KnowledgeNodeRequest(nodeType.Id, "Mercury", null));
 
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
         var problem = await response.Content.ReadFromJsonAsync<ProblemDetails>();
@@ -108,12 +101,12 @@ public class KnowledgeNodesControllerSystemTests
     [Test]
     public async Task GetAll_WithNodeTypeIdQueryParam_ReturnsOnlyMatchingNodes()
     {
-        var nodeType1Id = await CreateNodeTypeAsync();
-        var nodeType2Id = await CreateNodeTypeAsync();
-        await _client.PostAsJsonAsync("/nodes", new KnowledgeNodeRequest(nodeType1Id, "Mercury", null));
-        await _client.PostAsJsonAsync("/nodes", new KnowledgeNodeRequest(nodeType2Id, "Venus", null));
+        var nodeType1 = await _factory.Db.CreateNodeTypeAsync();
+        var nodeType2 = await _factory.Db.CreateNodeTypeAsync();
+        await _factory.Db.CreateKnowledgeNodeAsync(nodeType1.Id, "Mercury");
+        await _factory.Db.CreateKnowledgeNodeAsync(nodeType2.Id, "Venus");
 
-        var response = await _client.GetAsync($"/nodes?nodeTypeId={nodeType1Id}");
+        var response = await _client.GetAsync($"/nodes?nodeTypeId={nodeType1.Id}");
 
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
         var nodes = await response.Content.ReadFromJsonAsync<List<KnowledgeNode>>();
@@ -131,12 +124,11 @@ public class KnowledgeNodesControllerSystemTests
     [Test]
     public async Task Update_WhenRepositoryHitsUniqueViolation_Returns400()
     {
-        var nodeTypeId = await CreateNodeTypeAsync();
-        var createResponse = await _client.PostAsJsonAsync("/nodes", new KnowledgeNodeRequest(nodeTypeId, "Mercury", null));
-        var created = await createResponse.Content.ReadFromJsonAsync<KnowledgeNode>();
+        var nodeType = await _factory.Db.CreateNodeTypeAsync();
+        var knowledgeNode = await _factory.Db.CreateKnowledgeNodeAsync(nodeType.Id, "Mercury");
         _factory.Db.ThrowOnSaveChanges(PostgresExceptionFactory.UniqueViolation());
 
-        var response = await _client.PutAsJsonAsync($"/nodes/{created!.Id}", new KnowledgeNodeRequest(nodeTypeId, "Venus", null));
+        var response = await _client.PutAsJsonAsync($"/nodes/{knowledgeNode.Id}", new KnowledgeNodeRequest(nodeType.Id, "Venus", null));
 
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
     }
@@ -144,12 +136,11 @@ public class KnowledgeNodesControllerSystemTests
     [Test]
     public async Task Update_WhenRepositoryHitsNodeTypeForeignKeyViolation_Returns400()
     {
-        var nodeTypeId = await CreateNodeTypeAsync();
-        var createResponse = await _client.PostAsJsonAsync("/nodes", new KnowledgeNodeRequest(nodeTypeId, "Mercury", null));
-        var created = await createResponse.Content.ReadFromJsonAsync<KnowledgeNode>();
+        var nodeType = await _factory.Db.CreateNodeTypeAsync();
+        var knowledgeNode = await _factory.Db.CreateKnowledgeNodeAsync(nodeType.Id, "Mercury");
         _factory.Db.ThrowOnSaveChanges(PostgresExceptionFactory.ForeignKeyViolation(tableName: "knowledge_node"));
 
-        var response = await _client.PutAsJsonAsync($"/nodes/{created!.Id}", new KnowledgeNodeRequest(Guid.NewGuid(), "Mercury", null));
+        var response = await _client.PutAsJsonAsync($"/nodes/{knowledgeNode.Id}", new KnowledgeNodeRequest(Guid.NewGuid(), "Mercury", null));
 
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
     }
@@ -157,25 +148,23 @@ public class KnowledgeNodesControllerSystemTests
     [Test]
     public async Task Delete_WhenExists_Returns204AndRemovesIt()
     {
-        var nodeTypeId = await CreateNodeTypeAsync();
-        var createResponse = await _client.PostAsJsonAsync("/nodes", new KnowledgeNodeRequest(nodeTypeId, "Mercury", null));
-        var created = await createResponse.Content.ReadFromJsonAsync<KnowledgeNode>();
+        var nodeType = await _factory.Db.CreateNodeTypeAsync();
+        var knowledgeNode = await _factory.Db.CreateKnowledgeNodeAsync(nodeType.Id);
 
-        var deleteResponse = await _client.DeleteAsync($"/nodes/{created!.Id}");
+        var deleteResponse = await _client.DeleteAsync($"/nodes/{knowledgeNode.Id}");
 
         Assert.That(deleteResponse.StatusCode, Is.EqualTo(HttpStatusCode.NoContent));
-        Assert.That(await _factory.Db.KnowledgeNode.FindAsync(created.Id), Is.Null);
+        Assert.That(await _factory.Db.KnowledgeNode.FindAsync(knowledgeNode.Id), Is.Null);
     }
 
     [Test]
     public async Task Delete_WhenRepositoryHitsKnowledgeRelationForeignKeyViolation_Returns400()
     {
-        var nodeTypeId = await CreateNodeTypeAsync();
-        var createResponse = await _client.PostAsJsonAsync("/nodes", new KnowledgeNodeRequest(nodeTypeId, "Mercury", null));
-        var created = await createResponse.Content.ReadFromJsonAsync<KnowledgeNode>();
+        var nodeType = await _factory.Db.CreateNodeTypeAsync();
+        var knowledgeNode = await _factory.Db.CreateKnowledgeNodeAsync(nodeType.Id);
         _factory.Db.ThrowOnSaveChanges(PostgresExceptionFactory.ForeignKeyViolation(tableName: "knowledge_relation"));
 
-        var response = await _client.DeleteAsync($"/nodes/{created!.Id}");
+        var response = await _client.DeleteAsync($"/nodes/{knowledgeNode.Id}");
 
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
     }

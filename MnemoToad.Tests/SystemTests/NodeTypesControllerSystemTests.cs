@@ -90,23 +90,21 @@ public class NodeTypesControllerSystemTests
     [Test]
     public async Task Delete_WhenExists_Returns204AndRemovesIt()
     {
-        var createResponse = await _client.PostAsJsonAsync("/nodeTypes", new NodeTypeRequest("Person", null));
-        var created = await createResponse.Content.ReadFromJsonAsync<NodeType>();
+        var nodeType = await _factory.Db.CreateNodeTypeAsync();
 
-        var deleteResponse = await _client.DeleteAsync($"/nodeTypes/{created!.Id}");
+        var deleteResponse = await _client.DeleteAsync($"/nodeTypes/{nodeType.Id}");
 
         Assert.That(deleteResponse.StatusCode, Is.EqualTo(HttpStatusCode.NoContent));
-        Assert.That(await _factory.Db.NodeType.FindAsync(created.Id), Is.Null);
+        Assert.That(await _factory.Db.NodeType.FindAsync(nodeType.Id), Is.Null);
     }
 
     [Test]
     public async Task Delete_WhenRepositoryHitsForeignKeyViolation_Returns400()
     {
-        var createResponse = await _client.PostAsJsonAsync("/nodeTypes", new NodeTypeRequest("Person", null));
-        var created = await createResponse.Content.ReadFromJsonAsync<NodeType>();
+        var nodeType = await _factory.Db.CreateNodeTypeAsync();
         _factory.Db.ThrowOnSaveChanges(PostgresExceptionFactory.ForeignKeyViolation());
 
-        var response = await _client.DeleteAsync($"/nodeTypes/{created!.Id}");
+        var response = await _client.DeleteAsync($"/nodeTypes/{nodeType.Id}");
 
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
     }
