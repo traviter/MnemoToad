@@ -1,6 +1,0 @@
-<Solution>
-  <Project Path="MnemoToad.Api/MnemoToad.Api.csproj" />
-  <Project Path="MnemoToad.Data/MnemoToad.Data.csproj" />
-  <Project Path="MnemoToad.DbMigrator/MnemoToad.DbMigrator.csproj" Id="90d7ff92-4407-44b2-9ede-c426b47c7d87" />
-  <Project Path="MnemoToad.Tests/MnemoToad.Tests.csproj" />
-</Solution>

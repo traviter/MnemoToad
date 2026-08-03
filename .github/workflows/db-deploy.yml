@@ -22,4 +22,4 @@ jobs:
       - name: Run DbUp migrator
         env:
           DB_ADMIN_CONNECTION_STRING: ${{ secrets.DB_ADMIN_CONNECTION_STRING }}
-        run: dotnet run --project MnemoToad.DbMigrator
+        run: dotnet run --project MnemoToad.Knowledge.DbMigrator

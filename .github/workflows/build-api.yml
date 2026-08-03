@@ -6,7 +6,7 @@ on:
 
 env:
   DOTNET_VERSION: '10.0.x'
-  API_PROJECT: MnemoToad.Api/MnemoToad.Api.csproj
+  API_PROJECT: MnemoToad.Knowledge.Api/MnemoToad.Knowledge.Api.csproj
 
 jobs:
   build:

@@ -6,7 +6,7 @@ on:
 
 env:
   DOTNET_VERSION: '10.0.x'
-  TEST_PROJECT: MnemoToad.Tests/MnemoToad.Tests.csproj
+  TEST_PROJECT: MnemoToad.Knowledge.Tests/MnemoToad.Knowledge.Tests.csproj
 
 jobs:
   test:

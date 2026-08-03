@@ -59,7 +59,7 @@ jobs:
           fi
 
       - name: Run Karate tests
-        working-directory: MnemoToad.Karate
+        working-directory: MnemoToad.Knowledge.Karate
         run: |
           mvn test -Dkarate.env=${{ steps.params.outputs.env }} -Dkarate.tags=${{ steps.params.outputs.tags }}
 
@@ -68,4 +68,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: karate-reports
-          path: MnemoToad.Karate/target/karate-reports
+          path: MnemoToad.Knowledge.Karate/target/karate-reports

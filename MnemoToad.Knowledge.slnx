@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="MnemoToad.Knowledge.Api/MnemoToad.Knowledge.Api.csproj" />
+  <Project Path="MnemoToad.Knowledge.Data/MnemoToad.Knowledge.Data.csproj" />
+  <Project Path="MnemoToad.Knowledge.DbMigrator/MnemoToad.Knowledge.DbMigrator.csproj" Id="90d7ff92-4407-44b2-9ede-c426b47c7d87" />
+  <Project Path="MnemoToad.Knowledge.Tests/MnemoToad.Knowledge.Tests.csproj" />
+</Solution>

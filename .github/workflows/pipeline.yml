@@ -26,12 +26,12 @@ jobs:
         with:
           filters: |
             api:
-              - 'MnemoToad.Api/**'
-              - 'MnemoToad.Data/**'
+              - 'MnemoToad.Knowledge.Api/**'
+              - 'MnemoToad.Knowledge.Data/**'
             data:
-              - 'MnemoToad.DbMigrator/**'
+              - 'MnemoToad.Knowledge.DbMigrator/**'
             karate:
-              - 'MnemoToad.Karate/**'
+              - 'MnemoToad.Knowledge.Karate/**'
 
   build:
     needs: changes
