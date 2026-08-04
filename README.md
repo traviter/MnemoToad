@@ -30,12 +30,24 @@ conventions, CI/CD pipeline structure, testing approach, etc.).
 
 ## Running locally
 
-1. Start Postgres: `docker compose up -d`
-2. Add your own `appsettings.Development.json` to `MnemoToad.Knowledge.Api/` and
-   `MnemoToad.Knowledge.DbMigrator/` with a connection string pointing at the local database
-   (these files are gitignored — each project reads its own, not shared).
-3. Apply migrations: `dotnet run --project MnemoToad.Knowledge.DbMigrator`
-4. Run the API: `dotnet run --project MnemoToad.Knowledge.Api`
+`MnemoToad.Knowledge.DbMigrator/docker-compose.yml` is shared with `MnemoToad.Learning`'s
+equivalent (identical file, same Compose project name and container) — one local Postgres server
+hosting a separate database per service, mirroring the shared-server topology used in Azure.
+Running it from either repo controls the same container; no need to run it from both. The
+container doesn't auto-create any database — each service creates its own via a one-time bootstrap
+script.
+
+1. Start Postgres: `docker compose -f MnemoToad.Knowledge.DbMigrator/docker-compose.yml up -d`
+2. First time only (fresh volume): create the `mnemotoad_knowledge` database and its roles by
+   running `MnemoToad.Knowledge.DbMigrator/Bootstrap/CreateDatabaseAndRoles.sql` against the
+   container (e.g.
+   `psql -h localhost -U postgres -f MnemoToad.Knowledge.DbMigrator/Bootstrap/CreateDatabaseAndRoles.sql`,
+   password `localdevpassword`).
+3. Your own `appsettings.Development.json` already exists locally in `MnemoToad.Knowledge.Api/` and
+   `MnemoToad.Knowledge.DbMigrator/` (gitignored, not shared) pointing at `localhost:5432` /
+   `mnemotoad_knowledge` with the `mnemotoad_knowledge_app`/`mnemotoad_knowledge_admin` roles.
+4. Apply migrations: `dotnet run --project MnemoToad.Knowledge.DbMigrator`
+5. Run the API: `dotnet run --project MnemoToad.Knowledge.Api`
 
 ## Testing
 
