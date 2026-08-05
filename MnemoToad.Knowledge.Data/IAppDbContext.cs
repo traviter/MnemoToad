@@ -9,6 +9,8 @@ public interface IAppDbContext : IDisposable
     DbSet<KnowledgeNode> KnowledgeNode { get; }
     DbSet<RelationshipType> RelationshipType { get; }
     DbSet<KnowledgeRelation> KnowledgeRelation { get; }
+    DbSet<AttributeType> AttributeType { get; }
+    DbSet<KnowledgeNodeAttribute> KnowledgeNodeAttribute { get; }
 
     Task<int> SaveChangesAsync();
     Task<int> ExecuteDeleteAsync<TEntity>(IQueryable<TEntity> query) where TEntity : class;

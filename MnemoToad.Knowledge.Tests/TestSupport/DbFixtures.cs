@@ -51,4 +51,25 @@ internal static class DbFixtures
         await db.SaveChangesAsync();
         return knowledgeRelation;
     }
+
+    public static async Task<AttributeType> CreateAttributeTypeAsync(this IAppDbContext db, string? name = null, string? description = null)
+    {
+        var attributeType = new AttributeType { Name = name ?? $"AttributeType_{Guid.NewGuid()}", Description = description };
+        db.AttributeType.Add(attributeType);
+        await db.SaveChangesAsync();
+        return attributeType;
+    }
+
+    public static async Task<KnowledgeNodeAttribute> CreateKnowledgeNodeAttributeAsync(this IAppDbContext db, Guid knowledgeNodeId, Guid attributeTypeId, string? value = null)
+    {
+        var knowledgeNodeAttribute = new KnowledgeNodeAttribute
+        {
+            KnowledgeNodeId = knowledgeNodeId,
+            AttributeTypeId = attributeTypeId,
+            Value = value ?? $"Value_{Guid.NewGuid()}"
+        };
+        db.KnowledgeNodeAttribute.Add(knowledgeNodeAttribute);
+        await db.SaveChangesAsync();
+        return knowledgeNodeAttribute;
+    }
 }

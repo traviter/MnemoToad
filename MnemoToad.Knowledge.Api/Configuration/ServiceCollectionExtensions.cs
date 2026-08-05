@@ -26,6 +26,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IKnowledgeNodeRepository, KnowledgeNodeRepository>();
         services.AddScoped<IRelationshipTypeRepository, RelationshipTypeRepository>();
         services.AddScoped<IKnowledgeRelationRepository, KnowledgeRelationRepository>();
+        services.AddScoped<IAttributeTypeRepository, AttributeTypeRepository>();
+        services.AddScoped<IKnowledgeNodeAttributeRepository, KnowledgeNodeAttributeRepository>();
 
         return services;
     }

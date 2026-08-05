@@ -12,6 +12,8 @@ public class AppDbContext : DbContext, IAppDbContext
     public DbSet<KnowledgeNode> KnowledgeNode => Set<KnowledgeNode>();
     public DbSet<RelationshipType> RelationshipType => Set<RelationshipType>();
     public DbSet<KnowledgeRelation> KnowledgeRelation => Set<KnowledgeRelation>();
+    public DbSet<AttributeType> AttributeType => Set<AttributeType>();
+    public DbSet<KnowledgeNodeAttribute> KnowledgeNodeAttribute => Set<KnowledgeNodeAttribute>();
 
     public Task<int> SaveChangesAsync() => SaveChangesAsync(CancellationToken.None);
 
