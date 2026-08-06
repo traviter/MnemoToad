@@ -31,6 +31,16 @@ Feature: KnowledgeNode API
     And match response.id == '#uuid'
     * eval knowledgeNodeFixtures.stageForCleanup(response.id)
 
+  Scenario: Create a knowledge node with attributes
+    * def nodeType = createNodeType()
+    * def name = uniqueName('KnowledgeNode')
+    Given path 'nodes'
+    And request { nodeTypeId: '#(nodeType.response.id)', canonicalName: '#(name)', attributes: { isoCode: 'FR', population: 68000000, isEuMember: true } }
+    When method post
+    Then status 201
+    And match response.attributes == { isoCode: 'FR', population: 68000000, isEuMember: true }
+    * eval knowledgeNodeFixtures.stageForCleanup(response.id)
+
   Scenario: Reject creation with missing canonical name
     * def nodeType = createNodeType()
     Given path 'nodes'
@@ -48,6 +58,20 @@ Feature: KnowledgeNode API
     * def randomId = '' + java.util.UUID.randomUUID()
     Given path 'nodes'
     And request { nodeTypeId: '#(randomId)', canonicalName: '#(uniqueName("KnowledgeNode"))' }
+    When method post
+    Then status 400
+
+  Scenario: Reject creation with an array-valued attribute
+    * def nodeType = createNodeType()
+    Given path 'nodes'
+    And request { nodeTypeId: '#(nodeType.response.id)', canonicalName: '#(uniqueName("KnowledgeNode"))', attributes: { tags: ['a', 'b'] } }
+    When method post
+    Then status 400
+
+  Scenario: Reject creation with an object-valued attribute
+    * def nodeType = createNodeType()
+    Given path 'nodes'
+    And request { nodeTypeId: '#(nodeType.response.id)', canonicalName: '#(uniqueName("KnowledgeNode"))', attributes: { nested: { a: 1 } } }
     When method post
     Then status 400
 
@@ -82,6 +106,15 @@ Feature: KnowledgeNode API
     Then status 200
     And match response.canonicalName == created.response.canonicalName
 
+  Scenario: Get a knowledge node by id returns its attributes
+    * def nodeType = createNodeType()
+    * def created = createKnowledgeNode({ nodeTypeId: nodeType.response.id, attributes: { isoCode: 'FR' } })
+
+    Given path 'nodes', created.response.id
+    When method get
+    Then status 200
+    And match response.attributes == { isoCode: 'FR' }
+
   Scenario: List knowledge nodes includes the newly created one
     * def nodeType = createNodeType()
     * def created = createKnowledgeNode({ nodeTypeId: nodeType.response.id })
@@ -91,6 +124,16 @@ Feature: KnowledgeNode API
     Then status 200
     * def found = karate.filter(response, function(x){ return x.id == created.response.id })
     And match found[0].canonicalName == created.response.canonicalName
+
+  Scenario: List knowledge nodes does not include attributes
+    * def nodeType = createNodeType()
+    * def created = createKnowledgeNode({ nodeTypeId: nodeType.response.id, attributes: { isoCode: 'FR' } })
+
+    Given path 'nodes'
+    When method get
+    Then status 200
+    * def found = karate.filter(response, function(x){ return x.id == created.response.id })
+    And match found[0].attributes == '#notpresent'
 
   Scenario: List knowledge nodes filtered by node type
     * def nodeType1 = createNodeType()
@@ -117,6 +160,26 @@ Feature: KnowledgeNode API
     Then status 200
     And match response.canonicalName == updatedName
     And match response.description == 'Updated by test'
+
+  Scenario: Update a knowledge node fully replaces its attributes
+    * def nodeType = createNodeType()
+    * def created = createKnowledgeNode({ nodeTypeId: nodeType.response.id, attributes: { isoCode: 'FR', population: 68000000 } })
+
+    Given path 'nodes', created.response.id
+    And request { nodeTypeId: '#(nodeType.response.id)', canonicalName: '#(created.response.canonicalName)', attributes: { isoCode: 'FR', isEuMember: true } }
+    When method put
+    Then status 200
+    And match response.attributes == { isoCode: 'FR', isEuMember: true }
+
+  Scenario: Update a knowledge node with no attributes clears the existing ones
+    * def nodeType = createNodeType()
+    * def created = createKnowledgeNode({ nodeTypeId: nodeType.response.id, attributes: { isoCode: 'FR' } })
+
+    Given path 'nodes', created.response.id
+    And request { nodeTypeId: '#(nodeType.response.id)', canonicalName: '#(created.response.canonicalName)' }
+    When method put
+    Then status 200
+    And match response.attributes == {}
 
   Scenario: Reject update with a duplicate name for the same node type
     * def nodeType = createNodeType()
@@ -159,3 +222,21 @@ Feature: KnowledgeNode API
     Given path 'nodeTypes', nodeType.response.id
     When method delete
     Then status 400
+
+  Scenario: Get attributes for a knowledge node via the nested endpoint
+    * def nodeType = createNodeType()
+    * def created = createKnowledgeNode({ nodeTypeId: nodeType.response.id, attributes: { isoCode: 'FR', population: 68000000 } })
+
+    Given path 'nodes', created.response.id, 'attributes'
+    When method get
+    Then status 200
+    And match response == { isoCode: 'FR', population: 68000000 }
+
+  Scenario: Get attributes for a knowledge node with none returns an empty object
+    * def nodeType = createNodeType()
+    * def created = createKnowledgeNode({ nodeTypeId: nodeType.response.id })
+
+    Given path 'nodes', created.response.id, 'attributes'
+    When method get
+    Then status 200
+    And match response == {}

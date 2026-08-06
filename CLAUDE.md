@@ -46,30 +46,38 @@
   deleted together as a batch. A fresh environment reaches the same end state (table never existed)
   whether the scripts are present or not, so there's no consistency risk once every environment has
   converged. First done for the retired `country` table (scripts `001`, `002`, `005`).
+- **A narrower, related exception: a script that never left local dev can be edited (or deleted) in
+  place outright, rather than appended-to.** The append-only rule exists to protect *divergent*
+  environments (a teammate, CI, or prod already ran the old version) from drifting out of sync with
+  a since-edited script. If nothing beyond the author's own local DbUp journal has ever run it, there
+  is no other environment to diverge from — editing the file and having that one person drop/recreate
+  their local database (clean journal, fresh apply) is strictly simpler than carrying a same-day
+  correction forward as a second script. `010_CreateKnowledgeNodeAttributeTable.sql` (see the
+  `KnowledgeNodeAttribute` bullet under "API patterns" below) was edited this way when its
+  `AttributeType` FK was replaced with a composite key, days after its original authoring and still
+  local-only; `002_CreateAttributeTypeTable.sql` was deleted outright the same way when `AttributeType`
+  was dropped (see below) — its slot (`002`) is an unused gap again, same status as `005`. Don't
+  reach for this once a script has actually shipped anywhere else; that's back to the append-only
+  rule (or the fully-retired-table exception above, if the whole table is going away).
 - **A retired number can be reused for a new, unrelated script** — DbUp's journal tracks applied
   scripts by filename, not by number, so a new script numbered `001` with a different filename than
   the old (deleted) `001_CreateCountryTable.sql` is simply a fresh, unapplied script to DbUp; no
   collision. `001_GrantKnowledgeAppUserPrivileges.sql` (added when Knowledge's dedicated
-  admin/app roles were introduced — see below) reused `001` this way; `002_CreateAttributeTypeTable.sql`
-  (see the `AttributeType` bullet under "API patterns" below) reused `002` the same way. `005`
-  remains an unused gap for now, not because reuse is banned, just because nothing's needed that
-  slot yet.
+  admin/app roles were introduced — see below) reused `001` this way. `002` and `005` are both
+  currently unused gaps, not because reuse is banned, just because nothing's needed either slot yet.
 - **Sequence still matters, even though numbers themselves aren't sacred — a new script always
   gets the next number after the highest one in use, unless it genuinely has no dependency on
   anything already-numbered.** DbUp runs scripts in filename order, so a script that touches a
   table (`ALTER TABLE`, `INSERT`, etc.) must sort *after* that table's `CREATE TABLE` script or a
   fresh environment fails outright the first time migrations run. The `001`/`004` grant scripts
-  (and `002_CreateAttributeTypeTable.sql` above) were only safe to place early because they either
-  operate on roles/privileges or create a brand-new table with no FK to anything else — they have
-  no ordering dependency on any other `CREATE TABLE` script. This was gotten wrong once earlier in
-  this table's own history: a `jsonb` column once planned for `knowledge_node` was first numbered
-  into the `002` slot without checking that `knowledge_node` itself isn't created until
-  `007_CreateKnowledgeNodeTable.sql` — a `002` `ALTER TABLE knowledge_node` would have failed on a
-  fresh database (that jsonb approach was later abandoned in favor of the `AttributeType`/
-  `KnowledgeNodeAttribute` tables described below, for unrelated reasons, but the sequencing lesson
-  stands). `010_CreateKnowledgeNodeAttributeTable.sql` (depends on both `knowledge_node`, from `007`,
-  and `attribute_type`, from `002`) correctly sorts after both. This same rule applies in
-  `MnemoToad.Learning` too — don't assume an open-numbered gap is safe to fill without checking
+  were only safe to place early because they operate on roles/privileges, not a table — no ordering
+  dependency on any `CREATE TABLE` script. This was gotten wrong once earlier in this table's own
+  history: a `jsonb` column once planned for `knowledge_node` was first numbered into the `002` slot
+  without checking that `knowledge_node` itself isn't created until `007_CreateKnowledgeNodeTable.sql`
+  — a `002` `ALTER TABLE knowledge_node` would have failed on a fresh database (that jsonb approach
+  was later abandoned in favor of the `KnowledgeNodeAttribute` table described below, for unrelated
+  reasons, but the sequencing lesson stands). This same rule applies in `MnemoToad.Learning` too —
+  don't assume an open-numbered gap is safe to fill without checking
   what it would need to already exist.
 - `CreatedUtc`/`ModifiedUtc` columns (first used on `knowledge_node`) are DB-populated, not
   entity-mapped — the C# entity has no property for them at all. `created_utc` uses a column
@@ -363,45 +371,111 @@
     nothing referenced `RelationshipType` yet). Same underlying idea as the `ConstraintName` switch
     above — a Postgres string field on the caught `PostgresException` picks the right message — just
     keyed on whichever field actually distinguishes the cases at that call site.
-- **`AttributeType`** (script `002_CreateAttributeTypeTable.sql`) is an open-vocabulary lookup
-  table, identical in shape and behavior to `NodeType`/`RelationshipType` (`Name` unique, optional
-  `Description`, full CRUD via `AttributeTypesController` at `[Route("attributeTypes")]`,
-  constraint-violation translation the same way — "An AttributeType with that name already
-  exists."/"The AttributeType cannot be deleted because it is referenced by one or more
-  KnowledgeNodeAttributes.").
 - **`KnowledgeNodeAttribute`** (script `010_CreateKnowledgeNodeAttributeTable.sql`) is a normalized
   attribute table for scalar-literal instance attributes (a country's ISO code, population, etc.) —
   entity-valued attributes (a country's capital) still go through `KnowledgeRelation` instead. This
   replaced an earlier `KnowledgeNode.Properties jsonb` column design (see the sequencing note under
   "Database" above for the one concrete lesson that survived from that attempt) — reconsidered in
   favor of a normalized table because: (1) filtering/searching nodes by a specific attribute's value
-  is native SQL with a real column, versus jsonb operators; (2) this Postgres schema is a stepping
-  stone toward an eventual graph-database migration (see `project_platform_architecture` memory),
-  not the permanent destination, and graph traversal already means joins
+  is native SQL, versus jsonb operators over a single blob column; (2) this Postgres schema is a
+  stepping stone toward an eventual graph-database migration (see `project_platform_architecture`
+  memory), not the permanent destination, and graph traversal already means joins
   (`knowledge_node` → `knowledge_relation` → `knowledge_node`), so one more join for attributes isn't
-  a meaningfully different query shape; matching the existing `NodeType`/`RelationshipType`
-  lookup-table pattern is simpler to reason about than a one-off jsonb blob. A normalized table also
-  structurally parallels `knowledge_node_media` (once media exists) closely enough that a later
-  iteration could plausibly unify attributes and media into one generalized "node facts" concept —
-  jsonb can't hold a foreign key to a media asset, a normalized table can.
-  - Schema: `knowledge_node_id`/`attribute_type_id` FK (explicitly named
-    `fk_knowledge_node_attribute_knowledge_node_id`/`fk_knowledge_node_attribute_attribute_type_id`,
-    same reasoning as `KnowledgeRelation`'s explicit FK naming — two FKs need `ConstraintName`
-    disambiguation in the repository's catch blocks), `Value` is a plain `TEXT` column — not
-    per-datatype columns, not a second jsonb — simplest option given this isn't meant to be a
-    maximally-optimized permanent schema. This does lose jsonb's native type fidelity (a number
-    becomes a string); accepted as a v1 trade-off, not solved now. `UNIQUE (knowledge_node_id,
-    attribute_type_id)` (named `uq_knowledge_node_attribute_node_attribute_type`) — one value per
-    attribute per node.
-  - Unlike `KnowledgeRelation` (never updatable), this **is** updatable — changing a node's
-    population, say — so `KnowledgeNodeAttributeRepository` has an `UpdateAsync` (fetch by id,
-    mutate `Value`, save), mirroring `KnowledgeNodeRepository`'s shape rather than
-    `KnowledgeRelationRepository`'s create/delete-only shape. `GetByNodeIdAsync` filters on the
-    single `KnowledgeNodeId` column (simpler than `KnowledgeRelation`'s source-or-target `OR`).
-  - Endpoints live on `KnowledgeNodeAttributesController` (`[Route("nodeAttributes")]`):
-    `POST /nodeAttributes`, `PUT /nodeAttributes/{id}`, `DELETE /nodeAttributes/{id}`, and
-    `[HttpGet("/nodes/{nodeId:guid}/attributes")]` (absolute-route nested GET, same pattern as
-    `KnowledgeRelationsController`'s `/nodes/{nodeId}/relationships`).
+  a meaningfully different query shape; (3) a normalized table structurally parallels
+  `knowledge_node_media` (once media exists) closely enough that a later iteration could plausibly
+  unify attributes and media into one generalized "node facts" concept — jsonb can't hold a foreign
+  key to a media asset, a normalized table can.
+  - **No `AttributeType` lookup table.** An earlier version of this table FK'd `attribute_type_id`
+    into a separate open-vocabulary `AttributeType` table (`Name`/`Description`, full CRUD via
+    `AttributeTypesController`) — the idea being that table would hold *data types* (string/int/bool)
+    for serialization. That table actually ended up holding attribute *names* instead (a mismatch
+    from the original intent), and once `Value` became a `JsonValue?`-typed column (see the
+    `KnowledgeNode.Attributes` embedding bullet below), a stored datatype was redundant anyway —
+    `JsonValue`'s own JSON encoding already round-trips string vs number vs bool losslessly. Dropped
+    entirely: the table, `AttributeType.cs`, `IAttributeTypeRepository`/`AttributeTypeRepository`,
+    `AttributeTypesController`, `AttributeTypeRequest`, and script `002_CreateAttributeTypeTable.sql`
+    (slot `002` is an unused gap again, same status as `005`).
+  - Schema: `(knowledge_node_id, key)` **composite primary key** (named `pk_knowledge_node_attribute`)
+    — `key` is a plain `VARCHAR(100)` (the attribute name itself, no lookup table), so the composite
+    PK is what used to be `UNIQUE (knowledge_node_id, attribute_type_id)`; there's no separate `Id`
+    column at all. `knowledge_node_id` FKs to `knowledge_node(id)` (`fk_knowledge_node_attribute_knowledge_node_id`).
+    `value` is native Postgres **`jsonb`**, not `TEXT` — Postgres itself becomes type-aware
+    (`jsonb_typeof()`), and `jsonb` gets real equality/indexing semantics for the eventual "query
+    nodes by attribute value" endpoint (the whole reason this stayed a normalized table instead of a
+    single jsonb blob column on `knowledge_node` — see point (1) above). The `KnowledgeNodeAttribute`
+    entity has no navigation-property equivalent for `key` disambiguation beyond the composite key
+    itself — `GetByNodeIdAsync`/`UpdateAsync`/etc. all just filter/match on the plain `KnowledgeNodeId`
+    and `Key` columns directly, no join.
+  - **Superseded design note:** an earlier version of this feature also gave
+    `KnowledgeNodeAttributesController` full `POST`/`PUT`/`DELETE` CRUD (mutating one attribute row
+    directly, first by `attributeTypeId`, later by node+key). That was removed once it became clear
+    the app server doesn't think in terms of a separate attribute resource at all — see the
+    "`KnowledgeNode.Attributes` embedding" bullet below for the design that replaced it.
+    `KnowledgeNodeAttributesController` now only has the nested `GET`.
+- **`KnowledgeNode.Attributes` embedding** — the app server treats a node's attributes as part of the
+  node object, not a separate resource, even though they stay normalized in `knowledge_node_attribute`
+  underneath (that normalization is why the table exists at all — see the `KnowledgeNodeAttribute`
+  bullet above; nothing about that changed).
+  - `KnowledgeNode` (the same entity class returned directly by `KnowledgeNodesController`, per this
+    project's no-separate-response-DTO convention) carries a real
+    `Dictionary<string, JsonValue?>? Attributes` property, excluded from the table mapping via
+    `modelBuilder.Entity<KnowledgeNode>().Ignore(n => n.Attributes)` in `AppDbContext.OnModelCreating`
+    — **the first `OnModelCreating`/Fluent API usage in this codebase** (see "Database" above: DB
+    constraints still live purely in DbUp, this is pure ORM-side shaping, a different category — the
+    same `OnModelCreating` also carries `KnowledgeNodeAttribute`'s composite-key config, since EF has
+    no attribute-based way to declare a multi-property key). `KnowledgeNodeRequest` carries the
+    matching `Dictionary<string, JsonValue?>? Attributes = null`.
+  - **`Attributes` is nullable with no property-initializer default, and carries
+    `[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]`** — this is a second, narrower
+    instance of an entity carrying a `System.Text.Json` attribute for wire-shaping purposes (see the
+    `ScalarJsonValueConverter` bullet below for the first). The obvious-looking alternative — default
+    it to `new()` (empty dict) like every other collection in this codebase — was tried first and is
+    wrong: EF still runs the normal parameterless constructor for every materialized row regardless of
+    `Ignore()`, so a `= new()` default meant `GetAllAsync`'s list items always got a real (empty)
+    dictionary assigned, which System.Text.Json then serializes as `"attributes": {}` on every list
+    item — the opposite of "list stays lightweight" (caught by a Karate assertion expecting the key to
+    be entirely absent, not merely empty; a corresponding `.NET` system test
+    (`GetAll_ResponseOmitsAttributesKeyEntirely`) parses the raw JSON and checks `TryGetProperty`
+    rather than deserializing into `KnowledgeNode`, since a typed deserialize can't distinguish "key
+    absent" from "key present with the CLR default" the way raw JSON inspection can). With no default,
+    `Attributes` is genuinely `null` for anything `GetAllAsync` returns (never touched), so
+    `JsonIgnore(WhenWritingNull)` omits the key entirely for list items while still emitting `{}` for
+    single-node responses that legitimately have zero attributes. `KnowledgeNodeRepository.CreateAsync`/
+    `UpdateAsync` normalize with `knowledgeNode.Attributes ??= new();` right at the top, so the
+    single-item response paths (`GetByIdAsync`, `CreateAsync`, `UpdateAsync`) always end up with a
+    non-null (possibly empty) dictionary regardless of what the caller passed in — the repository
+    doesn't lean on `KnowledgeNodesController`'s own `request.Attributes ?? new()` to guarantee this.
+  - `KnowledgeNodeAttribute.Value` is `JsonValue?` in C#, via an EF Core `HasConversion`/`ValueComparer`
+    pair (also in `OnModelCreating`, alongside `.HasColumnType("jsonb")`) that serializes to/from the
+    `jsonb` column — repository code never manually calls `JsonNode.Parse`/`.ToJsonString()`.
+    `System.Text.Json.Nodes.JsonValue` (the scalar-only subtype of `JsonNode` — no `JsonObject`/
+    `JsonArray`) was chosen deliberately: **arrays and nested objects aren't supported attribute
+    values, and the type itself is the validation** rather than a custom `ValidationAttribute`. A
+    default `JsonValueConverter` throws `InvalidOperationException` (not `JsonException`) for an
+    object/array token, which `SystemTextJsonInputFormatter` doesn't translate into a 400 — so
+    `MnemoToad.Knowledge.Api/Json/ScalarJsonValueConverter.cs` is registered via
+    `AddJsonOptions` in `ServiceCollectionExtensions.cs` specifically to rethrow as `JsonException`,
+    keeping a bad attribute value a normal 400 instead of a 500. `.HasColumnType("jsonb")` is
+    Postgres-specific syntax, but harmless under the SQLite test provider too — SQLite has no native
+    `jsonb` type and falls back to NUMERIC column affinity for the unrecognized type name, which still
+    round-trips the converted JSON text correctly (confirmed by the repository/system test suite,
+    including numeric-looking values like population counts).
+  - `KnowledgeNodeRepository.CreateAsync`/`UpdateAsync` orchestrate the node and its attribute rows as
+    one unit, reading/writing `KnowledgeNodeAttribute` directly through the same `IAppDbContext` it
+    already depended on (no new repository-to-repository dependency, no reintroduced service layer).
+    Everything stays on the EF change tracker (`Add`/`Remove`, in-place field mutation) rather than
+    `ExecuteDeleteAsync`, so one `SaveChangesAsync()` call covers the whole unit atomically —
+    `ExecuteDeleteAsync` runs immediately as its own statement outside that unit and would break
+    atomicity if mixed in. `UpdateAsync` is **full-replace**: the submitted `Attributes` is the
+    complete desired state for that node — a key present in the DB but absent from the submitted
+    dictionary is removed, not left alone. Matching current rows against the incoming dictionary is a
+    plain case-sensitive `Key` string comparison — with no lookup table left to mediate name
+    resolution, there's no case-insensitive dedup logic to preserve (an earlier version needed one,
+    specifically to avoid creating duplicate `AttributeType` rows differing only by case; that concern
+    doesn't exist anymore).
+  - `GET /nodes` (list) does **not** populate `Attributes` (stays the bare per-row shape); only
+    `GET /nodes/{id}` does — a deliberate choice to avoid the extra query cost across a
+    potentially-large list for a shape list views likely don't need.
 
 ## Testing (MnemoToad.Knowledge.Tests)
 - **NUnit + Moq**, not xUnit — a deliberate switch, not the default `dotnet new` choice, so don't
@@ -413,10 +487,10 @@
     mock (see "API patterns" above). `ValidationException`-catch assertions check the returned
     `ObjectResult`'s `StatusCode` is `400` and its `Value` is a `ProblemDetails` with the expected
     `Detail`, matching what the controller actually returns (`Problem(...)`).
-  - **Repository tests** (`MnemoToad.Knowledge.Tests/Repositories/`) exist for all six entities
+  - **Repository tests** (`MnemoToad.Knowledge.Tests/Repositories/`) exist for all five entities
     (`NodeTypeRepositoryTests`, `KnowledgeNodeRepositoryTests`, `RelationshipTypeRepositoryTests`,
-    `KnowledgeRelationRepositoryTests`, `AttributeTypeRepositoryTests`,
-    `KnowledgeNodeAttributeRepositoryTests`) and run query/CRUD assertions against a real EF Core SQLite
+    `KnowledgeRelationRepositoryTests`, `KnowledgeNodeAttributeRepositoryTests`) and run query/CRUD
+    assertions against a real EF Core SQLite
     (`DataSource=:memory:`) database, with constraint violations simulated separately (see
     `MockableAppDbContext` below) — this is the layer where the "let the DB decide" collapse
     described above actually gets exercised. **This was EF Core's InMemory provider until
@@ -475,10 +549,10 @@
   needs `constraintName` to disambiguate its three FKs; `KnowledgeNodeRepository`/
   `RelationshipTypeRepository` need `tableName` to disambiguate a delete-time violation (referenced
   by a `KnowledgeRelation`) from a create-time one (see "Constraint-violation translation" above).
-- **System tests** (`MnemoToad.Knowledge.Tests/SystemTests/`) exist for all six controllers
+- **System tests** (`MnemoToad.Knowledge.Tests/SystemTests/`) exist for all five controllers
   (`NodeTypesControllerSystemTests`, `KnowledgeNodesControllerSystemTests`,
   `RelationshipTypesControllerSystemTests`, `KnowledgeRelationsControllerSystemTests`,
-  `AttributeTypesControllerSystemTests`, `KnowledgeNodeAttributesControllerSystemTests`) and send
+  `KnowledgeNodeAttributesControllerSystemTests`) and send
   real HTTP requests via `HttpClient` — not calling controller action methods directly. This matters
   because ASP.NET Core's automatic `[ApiController]` model-validation filter (DataAnnotations) only
   runs as part of the real MVC pipeline; a direct controller-method call bypasses
@@ -500,7 +574,7 @@
     actually needs (the same `Db` persisting across multiple requests within one test).
   - **`DbFixtures`** (`MnemoToad.Knowledge.Tests/TestSupport/DbFixtures.cs`) — `IAppDbContext` extension methods
     (`CreateNodeTypeAsync`, `CreateKnowledgeNodeAsync`, `CreateRelationshipTypeAsync`,
-    `CreateKnowledgeRelationAsync`, `CreateAttributeTypeAsync`, `CreateKnowledgeNodeAttributeAsync`)
+    `CreateKnowledgeRelationAsync`, `CreateKnowledgeNodeAttributeAsync`)
     that insert directly into the in-memory database. System tests use
     these for setup-only preconditions (e.g. a `NodeType` a `KnowledgeNode` test needs to reference)
     and reserve real HTTP calls for whichever endpoint the test is actually exercising — the same

@@ -34,7 +34,8 @@ public class KnowledgeNodesController : ControllerBase
             {
                 NodeTypeId = request.NodeTypeId,
                 CanonicalName = request.CanonicalName,
-                Description = request.Description
+                Description = request.Description,
+                Attributes = request.Attributes ?? new()
             });
             return Created($"/nodes/{created.Id}", created);
         }
@@ -54,7 +55,8 @@ public class KnowledgeNodesController : ControllerBase
                 Id = id,
                 NodeTypeId = request.NodeTypeId,
                 CanonicalName = request.CanonicalName,
-                Description = request.Description
+                Description = request.Description,
+                Attributes = request.Attributes ?? new()
             });
             return updated is not null ? Ok(updated) : NotFound();
         }

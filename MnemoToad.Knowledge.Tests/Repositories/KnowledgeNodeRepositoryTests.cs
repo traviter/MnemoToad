@@ -4,6 +4,7 @@ using MnemoToad.Knowledge.Data.Repositories;
 using MnemoToad.Knowledge.Tests.TestSupport;
 using NUnit.Framework;
 using System.ComponentModel.DataAnnotations;
+using System.Text.Json.Nodes;
 
 namespace MnemoToad.Knowledge.Tests.Repositories;
 
@@ -60,6 +61,26 @@ public class KnowledgeNodeRepositoryTests
         var found = await _repository.GetByIdAsync(knowledgeNode.Id);
 
         Assert.That(found?.CanonicalName, Is.EqualTo("Mercury"));
+        Assert.That(found!.Attributes, Is.Empty);
+    }
+
+    [Test]
+    public async Task GetByIdAsync_WhenExists_PopulatesAttributesKeyedByKey()
+    {
+        var knowledgeNode = new KnowledgeNode { Id = Guid.NewGuid(), CanonicalName = "France" };
+        await _db.KnowledgeNode.AddAsync(knowledgeNode);
+        await _db.KnowledgeNodeAttribute.AddAsync(new KnowledgeNodeAttribute
+        {
+            KnowledgeNodeId = knowledgeNode.Id,
+            Key = "isoCode",
+            Value = JsonValue.Create("FR")
+        });
+        await _db.SaveChangesAsync();
+
+        var found = await _repository.GetByIdAsync(knowledgeNode.Id);
+
+        Assert.That(found!.Attributes!.Keys, Is.EquivalentTo(new[] { "isoCode" }));
+        Assert.That(found.Attributes!["isoCode"]!.GetValue<string>(), Is.EqualTo("FR"));
     }
 
     [Test]
@@ -82,6 +103,23 @@ public class KnowledgeNodeRepositoryTests
     }
 
     [Test]
+    public async Task CreateAsync_WithAttributes_CreatesRows()
+    {
+        var knowledgeNode = new KnowledgeNode
+        {
+            Id = Guid.NewGuid(),
+            CanonicalName = "France",
+            Attributes = new Dictionary<string, JsonValue?> { ["isoCode"] = JsonValue.Create("FR") }
+        };
+
+        await _repository.CreateAsync(knowledgeNode);
+
+        var row = await _db.KnowledgeNodeAttribute.AsNoTracking().SingleAsync(a => a.KnowledgeNodeId == knowledgeNode.Id);
+        Assert.That(row.Key, Is.EqualTo("isoCode"));
+        Assert.That(row.Value!.GetValue<string>(), Is.EqualTo("FR"));
+    }
+
+    [Test]
     public async Task UpdateAsync_WhenNotFound_ReturnsNull()
     {
         var updated = await _repository.UpdateAsync(new KnowledgeNode { Id = Guid.NewGuid(), CanonicalName = "Mercury" });
@@ -100,6 +138,38 @@ public class KnowledgeNodeRepositoryTests
 
         Assert.That(updated, Is.Not.Null);
         Assert.That(updated!.Description, Is.EqualTo("New description"));
+    }
+
+    [Test]
+    public async Task UpdateAsync_FullReplace_RemovesOmittedUpdatesChangedAndAddsNew()
+    {
+        var nodeTypeId = Guid.NewGuid();
+        var knowledgeNode = new KnowledgeNode { Id = Guid.NewGuid(), NodeTypeId = nodeTypeId, CanonicalName = "France" };
+        await _db.KnowledgeNode.AddAsync(knowledgeNode);
+
+        await _db.KnowledgeNodeAttribute.AddRangeAsync(
+            new KnowledgeNodeAttribute { KnowledgeNodeId = knowledgeNode.Id, Key = "isoCode", Value = JsonValue.Create("FR") },
+            new KnowledgeNodeAttribute { KnowledgeNodeId = knowledgeNode.Id, Key = "population", Value = JsonValue.Create(1000) });
+        await _db.SaveChangesAsync();
+
+        var updated = await _repository.UpdateAsync(new KnowledgeNode
+        {
+            Id = knowledgeNode.Id,
+            NodeTypeId = nodeTypeId,
+            CanonicalName = "France",
+            Attributes = new Dictionary<string, JsonValue?>
+            {
+                ["isoCode"] = JsonValue.Create("FR-NEW"),
+                ["isEuMember"] = JsonValue.Create(true)
+            }
+        });
+
+        Assert.That(updated, Is.Not.Null);
+        var rows = await _db.KnowledgeNodeAttribute.AsNoTracking().Where(a => a.KnowledgeNodeId == knowledgeNode.Id).ToListAsync();
+        Assert.That(rows.Select(r => r.Key), Is.EquivalentTo(new[] { "isoCode", "isEuMember" }));
+
+        var isoRow = rows.Single(r => r.Key == "isoCode");
+        Assert.That(isoRow.Value!.GetValue<string>(), Is.EqualTo("FR-NEW"));
     }
 
     [Test]
@@ -126,12 +196,27 @@ public class KnowledgeNodeRepositoryTests
     [Test]
     public void CreateAsync_OnUniqueViolation_ThrowsValidationExceptionWithDuplicateMessage()
     {
-        _db.ThrowOnSaveChanges(PostgresExceptionFactory.UniqueViolation());
+        _db.ThrowOnSaveChanges(PostgresExceptionFactory.UniqueViolation(constraintName: "uq_knowledge_node_node_type_id_canonical_name"));
 
         var ex = Assert.ThrowsAsync<ValidationException>(
             () => _repository.CreateAsync(new KnowledgeNode { Id = Guid.NewGuid(), CanonicalName = "Mercury" }));
 
         Assert.That(ex!.Message, Is.EqualTo("A KnowledgeNode with the same NodeType and CanonicalName already exists."));
+    }
+
+    [Test]
+    public void CreateAsync_OnKnowledgeNodeAttributePrimaryKeyViolation_ThrowsValidationExceptionAboutDuplicateAttribute()
+    {
+        _db.ThrowOnSaveChanges(PostgresExceptionFactory.UniqueViolation(constraintName: "pk_knowledge_node_attribute"));
+
+        var ex = Assert.ThrowsAsync<ValidationException>(() => _repository.CreateAsync(new KnowledgeNode
+        {
+            Id = Guid.NewGuid(),
+            CanonicalName = "Mercury",
+            Attributes = new Dictionary<string, JsonValue?> { ["isoCode"] = JsonValue.Create("FR") }
+        }));
+
+        Assert.That(ex!.Message, Is.EqualTo("An attribute with that key already exists for this KnowledgeNode."));
     }
 
     [Test]

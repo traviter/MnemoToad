@@ -6,6 +6,7 @@ using MnemoToad.Knowledge.Data.Entities;
 using MnemoToad.Knowledge.Data.Repositories;
 using NUnit.Framework;
 using System.ComponentModel.DataAnnotations;
+using System.Text.Json.Nodes;
 
 namespace MnemoToad.Knowledge.Tests.Controllers;
 
@@ -90,6 +91,35 @@ public class KnowledgeNodesControllerTests
     }
 
     [Test]
+    public async Task Create_WithAttributes_PassesAttributesToRepository()
+    {
+        var nodeTypeId = Guid.NewGuid();
+        var attributes = new Dictionary<string, JsonValue?> { ["isoCode"] = JsonValue.Create("FR") };
+        var created = new KnowledgeNode { Id = Guid.NewGuid(), NodeTypeId = nodeTypeId, CanonicalName = "France", Attributes = attributes };
+        _repository.Setup(r => r.CreateAsync(It.Is<KnowledgeNode>(n => n.Attributes == attributes)))
+            .ReturnsAsync(created);
+
+        var result = await _controller.Create(new KnowledgeNodeRequest(nodeTypeId, "France", null, attributes));
+
+        var createdResult = result as CreatedResult;
+        Assert.That(createdResult, Is.Not.Null);
+        Assert.That(createdResult!.Value, Is.SameAs(created));
+    }
+
+    [Test]
+    public async Task Create_WithNullAttributes_PassesEmptyDictionaryToRepository()
+    {
+        var nodeTypeId = Guid.NewGuid();
+        _repository.Setup(r => r.CreateAsync(It.Is<KnowledgeNode>(n => n.Attributes!.Count == 0)))
+            .ReturnsAsync(new KnowledgeNode { Id = Guid.NewGuid(), NodeTypeId = nodeTypeId, CanonicalName = "Mercury" });
+
+        var result = await _controller.Create(new KnowledgeNodeRequest(nodeTypeId, "Mercury", null, null));
+
+        Assert.That(result, Is.InstanceOf<CreatedResult>());
+        _repository.Verify(r => r.CreateAsync(It.Is<KnowledgeNode>(n => n.Attributes!.Count == 0)), Times.Once);
+    }
+
+    [Test]
     public async Task Create_WhenRepositoryThrowsValidationException_ReturnsProblem400()
     {
         _repository.Setup(r => r.CreateAsync(It.IsAny<KnowledgeNode>()))
@@ -113,6 +143,22 @@ public class KnowledgeNodesControllerTests
         _repository.Setup(r => r.UpdateAsync(It.Is<KnowledgeNode>(n => n.Id == id))).ReturnsAsync(updated);
 
         var result = await _controller.Update(id, new KnowledgeNodeRequest(Guid.NewGuid(), "Mercury", "New description"));
+
+        var ok = result as OkObjectResult;
+        Assert.That(ok, Is.Not.Null);
+        Assert.That(ok!.Value, Is.SameAs(updated));
+    }
+
+    [Test]
+    public async Task Update_WithAttributes_PassesAttributesToRepository()
+    {
+        var id = Guid.NewGuid();
+        var attributes = new Dictionary<string, JsonValue?> { ["isoCode"] = JsonValue.Create("FR") };
+        var updated = new KnowledgeNode { Id = id, CanonicalName = "France", Attributes = attributes };
+        _repository.Setup(r => r.UpdateAsync(It.Is<KnowledgeNode>(n => n.Id == id && n.Attributes == attributes)))
+            .ReturnsAsync(updated);
+
+        var result = await _controller.Update(id, new KnowledgeNodeRequest(Guid.NewGuid(), "France", null, attributes));
 
         var ok = result as OkObjectResult;
         Assert.That(ok, Is.Not.Null);

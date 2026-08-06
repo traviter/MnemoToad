@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using MnemoToad.Knowledge.Api.Json;
 using MnemoToad.Knowledge.Data;
 using MnemoToad.Knowledge.Data.Repositories;
 
@@ -9,7 +10,8 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddApiServices(this IServiceCollection services, IConfiguration configuration)
     {
         // Wires up routing/model-binding/action-invocation for [ApiController] classes.
-        services.AddControllers();
+        services.AddControllers()
+            .AddJsonOptions(options => options.JsonSerializerOptions.Converters.Add(new ScalarJsonValueConverter()));
 
         // Lets Swashbuckle discover our controllers' routes/parameters/response types.
         services.AddEndpointsApiExplorer();
@@ -26,7 +28,6 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IKnowledgeNodeRepository, KnowledgeNodeRepository>();
         services.AddScoped<IRelationshipTypeRepository, RelationshipTypeRepository>();
         services.AddScoped<IKnowledgeRelationRepository, KnowledgeRelationRepository>();
-        services.AddScoped<IAttributeTypeRepository, AttributeTypeRepository>();
         services.AddScoped<IKnowledgeNodeAttributeRepository, KnowledgeNodeAttributeRepository>();
 
         return services;

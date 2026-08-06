@@ -6,6 +6,9 @@ using MnemoToad.Knowledge.Tests.TestSupport;
 using NUnit.Framework;
 using System.Net;
 using System.Net.Http.Json;
+using System.Text;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 
 namespace MnemoToad.Knowledge.Tests.SystemTests;
 
@@ -53,6 +56,68 @@ public class KnowledgeNodesControllerSystemTests
     }
 
     [Test]
+    public async Task Create_WithAttributes_RoundTripsAttributesThroughTheRealStack()
+    {
+        var nodeType = await _factory.Db.CreateNodeTypeAsync();
+        var attributes = new Dictionary<string, JsonValue?>
+        {
+            ["isoCode"] = JsonValue.Create("FR"),
+            ["population"] = JsonValue.Create(68000000),
+            ["isEuMember"] = JsonValue.Create(true)
+        };
+
+        var createResponse = await _client.PostAsJsonAsync("/nodes", new KnowledgeNodeRequest(nodeType.Id, "France", null, attributes));
+        var created = await createResponse.Content.ReadFromJsonAsync<KnowledgeNode>();
+
+        Assert.That(createResponse.StatusCode, Is.EqualTo(HttpStatusCode.Created));
+        Assert.That(created!.Attributes!["isoCode"]!.GetValue<string>(), Is.EqualTo("FR"));
+        Assert.That(created.Attributes!["population"]!.GetValue<int>(), Is.EqualTo(68000000));
+        Assert.That(created.Attributes!["isEuMember"]!.GetValue<bool>(), Is.True);
+
+        var getResponse = await _client.GetAsync($"/nodes/{created.Id}");
+        var fetched = await getResponse.Content.ReadFromJsonAsync<KnowledgeNode>();
+        Assert.That(fetched!.Attributes!["isoCode"]!.GetValue<string>(), Is.EqualTo("FR"));
+    }
+
+    [Test]
+    public async Task Update_FullReplace_RemovesOmittedAttributeAndAddsNewOne()
+    {
+        var nodeType = await _factory.Db.CreateNodeTypeAsync();
+        var createResponse = await _client.PostAsJsonAsync("/nodes", new KnowledgeNodeRequest(nodeType.Id, "France", null,
+            new Dictionary<string, JsonValue?> { ["isoCode"] = JsonValue.Create("FR"), ["population"] = JsonValue.Create(68000000) }));
+        var created = await createResponse.Content.ReadFromJsonAsync<KnowledgeNode>();
+
+        var updateResponse = await _client.PutAsJsonAsync($"/nodes/{created!.Id}", new KnowledgeNodeRequest(nodeType.Id, "France", null,
+            new Dictionary<string, JsonValue?> { ["isoCode"] = JsonValue.Create("FR"), ["isEuMember"] = JsonValue.Create(true) }));
+        var updated = await updateResponse.Content.ReadFromJsonAsync<KnowledgeNode>();
+
+        Assert.That(updateResponse.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        Assert.That(updated!.Attributes!.Keys, Is.EquivalentTo(new[] { "isoCode", "isEuMember" }));
+    }
+
+    [Test]
+    public async Task Create_WithArrayAttributeValue_Returns400()
+    {
+        var nodeType = await _factory.Db.CreateNodeTypeAsync();
+        var json = "{\"nodeTypeId\":\"" + nodeType.Id + "\",\"canonicalName\":\"France\",\"attributes\":{\"tags\":[\"a\",\"b\"]}}";
+
+        var response = await _client.PostAsync("/nodes", new StringContent(json, Encoding.UTF8, "application/json"));
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+    }
+
+    [Test]
+    public async Task Create_WithObjectAttributeValue_Returns400()
+    {
+        var nodeType = await _factory.Db.CreateNodeTypeAsync();
+        var json = "{\"nodeTypeId\":\"" + nodeType.Id + "\",\"canonicalName\":\"France\",\"attributes\":{\"nested\":{\"a\":1}}}";
+
+        var response = await _client.PostAsync("/nodes", new StringContent(json, Encoding.UTF8, "application/json"));
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+    }
+
+    [Test]
     public async Task Create_WithBlankCanonicalName_Returns400WithValidationErrors()
     {
         var nodeType = await _factory.Db.CreateNodeTypeAsync();
@@ -78,7 +143,7 @@ public class KnowledgeNodesControllerSystemTests
     public async Task Create_WhenRepositoryHitsUniqueViolation_Returns400()
     {
         var nodeType = await _factory.Db.CreateNodeTypeAsync();
-        _factory.Db.ThrowOnSaveChanges(PostgresExceptionFactory.UniqueViolation());
+        _factory.Db.ThrowOnSaveChanges(PostgresExceptionFactory.UniqueViolation(constraintName: "uq_knowledge_node_node_type_id_canonical_name"));
 
         var response = await _client.PostAsJsonAsync("/nodes", new KnowledgeNodeRequest(nodeType.Id, "Mercury", null));
 
@@ -115,6 +180,20 @@ public class KnowledgeNodesControllerSystemTests
     }
 
     [Test]
+    public async Task GetAll_ResponseOmitsAttributesKeyEntirely()
+    {
+        var nodeType = await _factory.Db.CreateNodeTypeAsync();
+        await _factory.Db.CreateKnowledgeNodeAsync(nodeType.Id);
+
+        var response = await _client.GetAsync("/nodes");
+
+        var json = await response.Content.ReadAsStringAsync();
+        using var document = JsonDocument.Parse(json);
+        Assert.That(document.RootElement.GetArrayLength(), Is.GreaterThan(0));
+        Assert.That(document.RootElement[0].TryGetProperty("attributes", out _), Is.False);
+    }
+
+    [Test]
     public async Task Update_WhenNotFound_Returns404()
     {
         var response = await _client.PutAsJsonAsync($"/nodes/{Guid.NewGuid()}", new KnowledgeNodeRequest(Guid.NewGuid(), "Mercury", null));
@@ -127,7 +206,7 @@ public class KnowledgeNodesControllerSystemTests
     {
         var nodeType = await _factory.Db.CreateNodeTypeAsync();
         var knowledgeNode = await _factory.Db.CreateKnowledgeNodeAsync(nodeType.Id, "Mercury");
-        _factory.Db.ThrowOnSaveChanges(PostgresExceptionFactory.UniqueViolation());
+        _factory.Db.ThrowOnSaveChanges(PostgresExceptionFactory.UniqueViolation(constraintName: "uq_knowledge_node_node_type_id_canonical_name"));
 
         var response = await _client.PutAsJsonAsync($"/nodes/{knowledgeNode.Id}", new KnowledgeNodeRequest(nodeType.Id, "Venus", null));
 
