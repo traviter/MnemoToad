@@ -410,8 +410,11 @@
     `KnowledgeNodeAttributesController` full `POST`/`PUT`/`DELETE` CRUD (mutating one attribute row
     directly, first by `attributeTypeId`, later by node+key). That was removed once it became clear
     the app server doesn't think in terms of a separate attribute resource at all — see the
-    "`KnowledgeNode.Attributes` embedding" bullet below for the design that replaced it.
-    `KnowledgeNodeAttributesController` now only has the nested `GET`.
+    "`KnowledgeNode.Attributes` embedding" bullet below for the design that replaced it. The
+    controller (and `IKnowledgeNodeAttributeRepository`/`KnowledgeNodeAttributeRepository`) is now
+    gone entirely — its remaining nested `GET /nodes/{id}/attributes` was pure duplication of `GET
+    /nodes/{id}` (same reasoning, same removal, as `KnowledgeNodeMediaController`'s nested
+    `GET /nodes/{id}/media`; see the `MediaAsset`/`KnowledgeNodeMedia` bullet below).
 - **`KnowledgeNode.Attributes` embedding** — the app server treats a node's attributes as part of the
   node object, not a separate resource, even though they stay normalized in `knowledge_node_attribute`
   underneath (that normalization is why the table exists at all — see the `KnowledgeNodeAttribute`
@@ -585,9 +588,9 @@
     `GET /nodes/{id}/attributes` — removed once the user pointed out it was pure duplication: `GET
     /nodes/{id}` already embeds the exact same `Media` dictionary (no join to `media_asset` was ever
     needed to build either response, so there was never a cost the standalone endpoint was saving).
-    **`KnowledgeNodeAttributesController`'s nested `GET /nodes/{id}/attributes` has the identical
-    redundancy and is a known, deliberate follow-up — not fixed yet, tracked by the user separately.**
-    Don't assume its survival means the media removal was a one-off exception; it's next.
+    `KnowledgeNodeAttributesController`'s nested `GET /nodes/{id}/attributes` had the identical
+    redundancy and was removed the same way in a follow-up pass — see the `KnowledgeNodeAttribute`
+    bullet above.
   - **Superseded design notes**, kept because other memories/commits reference the earlier shapes:
     an earlier version had `MediaAsset` carrying `alt_text` and embedded a full `MediaAsset` object
     (including `url`) on `GET`, with `POST`/`PUT` accepting just a `mediaAssetId` per key — that
@@ -607,10 +610,10 @@
     mock (see "API patterns" above). `ValidationException`-catch assertions check the returned
     `ObjectResult`'s `StatusCode` is `400` and its `Value` is a `ProblemDetails` with the expected
     `Detail`, matching what the controller actually returns (`Problem(...)`).
-  - **Repository tests** (`MnemoToad.Knowledge.Tests/Repositories/`) exist for all six entities that
+  - **Repository tests** (`MnemoToad.Knowledge.Tests/Repositories/`) exist for all five entities that
     have their own repository (`NodeTypeRepositoryTests`, `KnowledgeNodeRepositoryTests`,
     `RelationshipTypeRepositoryTests`, `KnowledgeRelationRepositoryTests`,
-    `KnowledgeNodeAttributeRepositoryTests`, `MediaAssetRepositoryTests`) and run query/CRUD
+    `MediaAssetRepositoryTests`) and run query/CRUD
     assertions against a real EF Core SQLite
     (`DataSource=:memory:`) database, with constraint violations simulated separately (see
     `MockableAppDbContext` below) — this is the layer where the "let the DB decide" collapse
@@ -670,10 +673,10 @@
   needs `constraintName` to disambiguate its three FKs; `KnowledgeNodeRepository`/
   `RelationshipTypeRepository` need `tableName` to disambiguate a delete-time violation (referenced
   by a `KnowledgeRelation`) from a create-time one (see "Constraint-violation translation" above).
-- **System tests** (`MnemoToad.Knowledge.Tests/SystemTests/`) exist for all six controllers
+- **System tests** (`MnemoToad.Knowledge.Tests/SystemTests/`) exist for all five controllers
   (`NodeTypesControllerSystemTests`, `KnowledgeNodesControllerSystemTests`,
   `RelationshipTypesControllerSystemTests`, `KnowledgeRelationsControllerSystemTests`,
-  `KnowledgeNodeAttributesControllerSystemTests`, `MediaAssetsControllerSystemTests`) and send
+  `MediaAssetsControllerSystemTests`) and send
   real HTTP requests via `HttpClient` — not calling controller action methods directly. This matters
   because ASP.NET Core's automatic `[ApiController]` model-validation filter (DataAnnotations) only
   runs as part of the real MVC pipeline; a direct controller-method call bypasses

@@ -226,24 +226,6 @@ Feature: KnowledgeNode API
     When method delete
     Then status 400
 
-  Scenario: Get attributes for a knowledge node via the nested endpoint
-    * def nodeType = createNodeType()
-    * def created = createKnowledgeNode({ nodeTypeId: nodeType.response.id, attributes: { isoCode: 'FR', population: 68000000 } })
-
-    Given path 'nodes', created.response.id, 'attributes'
-    When method get
-    Then status 200
-    And match response == { isoCode: 'FR', population: 68000000 }
-
-  Scenario: Get attributes for a knowledge node with none returns an empty object
-    * def nodeType = createNodeType()
-    * def created = createKnowledgeNode({ nodeTypeId: nodeType.response.id })
-
-    Given path 'nodes', created.response.id, 'attributes'
-    When method get
-    Then status 200
-    And match response == {}
-
   Scenario: Create a knowledge node with media embeds the stored stanza
     * def nodeType = createNodeType()
     * def mediaAsset = createMediaAsset()
