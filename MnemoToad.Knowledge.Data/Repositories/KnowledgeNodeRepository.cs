@@ -31,12 +31,14 @@ public class KnowledgeNodeRepository : IKnowledgeNodeRepository
 
         var rows = await _db.KnowledgeNodeAttribute.Where(a => a.KnowledgeNodeId == id).ToListAsync();
         node.Attributes = rows.ToDictionary(r => r.Key, r => r.Value);
+        node.Media = await GetMediaAsync(id);
         return node;
     }
 
     public async Task<KnowledgeNode> CreateAsync(KnowledgeNode knowledgeNode)
     {
         knowledgeNode.Attributes ??= new();
+        knowledgeNode.Media ??= new();
         _db.KnowledgeNode.Add(knowledgeNode);
 
         foreach (var (key, value) in knowledgeNode.Attributes)
@@ -49,7 +51,21 @@ public class KnowledgeNodeRepository : IKnowledgeNodeRepository
             });
         }
 
+        foreach (var (key, stanza) in knowledgeNode.Media)
+        {
+            var (mediaAssetId, altText) = ExtractMediaFields(key, stanza);
+            _db.KnowledgeNodeMedia.Add(new KnowledgeNodeMedia
+            {
+                KnowledgeNodeId = knowledgeNode.Id,
+                Key = key,
+                MediaAssetId = mediaAssetId,
+                AltText = altText,
+                Metadata = stanza
+            });
+        }
+
         await SaveChangesAsync();
+        knowledgeNode.Media = await GetMediaAsync(knowledgeNode.Id);
         return knowledgeNode;
     }
 
@@ -59,6 +75,7 @@ public class KnowledgeNodeRepository : IKnowledgeNodeRepository
         if (existing is null) return null;
 
         knowledgeNode.Attributes ??= new();
+        knowledgeNode.Media ??= new();
         existing.NodeTypeId = knowledgeNode.NodeTypeId;
         existing.CanonicalName = knowledgeNode.CanonicalName;
         existing.Description = knowledgeNode.Description;
@@ -77,9 +94,65 @@ public class KnowledgeNodeRepository : IKnowledgeNodeRepository
                 _db.KnowledgeNodeAttribute.Add(new KnowledgeNodeAttribute { KnowledgeNodeId = existing.Id, Key = key, Value = value });
         }
 
+        var currentMediaRows = await _db.KnowledgeNodeMedia.Where(m => m.KnowledgeNodeId == existing.Id).ToListAsync();
+
+        foreach (var row in currentMediaRows.Where(r => !knowledgeNode.Media.ContainsKey(r.Key)))
+            _db.KnowledgeNodeMedia.Remove(row);
+
+        foreach (var (key, stanza) in knowledgeNode.Media)
+        {
+            var (mediaAssetId, altText) = ExtractMediaFields(key, stanza);
+            var existingRow = currentMediaRows.FirstOrDefault(r => r.Key == key);
+            if (existingRow is not null)
+            {
+                existingRow.MediaAssetId = mediaAssetId;
+                existingRow.AltText = altText;
+                existingRow.Metadata = stanza;
+            }
+            else
+            {
+                _db.KnowledgeNodeMedia.Add(new KnowledgeNodeMedia
+                {
+                    KnowledgeNodeId = existing.Id,
+                    Key = key,
+                    MediaAssetId = mediaAssetId,
+                    AltText = altText,
+                    Metadata = stanza
+                });
+            }
+        }
+
         await SaveChangesAsync();
         existing.Attributes = knowledgeNode.Attributes;
+        existing.Media = await GetMediaAsync(existing.Id);
         return existing;
+    }
+
+    private async Task<Dictionary<string, JsonObject?>> GetMediaAsync(Guid knowledgeNodeId)
+    {
+        var rows = await _db.KnowledgeNodeMedia.Where(m => m.KnowledgeNodeId == knowledgeNodeId).ToListAsync();
+        return rows.ToDictionary(r => r.Key, r => r.Metadata);
+    }
+
+    private static (Guid MediaAssetId, string AltText) ExtractMediaFields(string key, JsonObject? stanza)
+    {
+        if (stanza is null
+            || !stanza.TryGetPropertyValue("id", out var idNode)
+            || idNode is not JsonValue idValue
+            || !idValue.TryGetValue<string>(out var idString)
+            || !Guid.TryParse(idString, out var mediaAssetId))
+        {
+            throw new ValidationException($"The media entry '{key}' must include a valid 'id'.");
+        }
+
+        if (!stanza.TryGetPropertyValue("alt_text", out var altNode)
+            || altNode is not JsonValue altValue
+            || !altValue.TryGetValue<string>(out var altText))
+        {
+            throw new ValidationException($"The media entry '{key}' must include a valid 'alt_text'.");
+        }
+
+        return (mediaAssetId, altText);
     }
 
     public async Task<bool> DeleteAsync(Guid id)
@@ -127,6 +200,22 @@ public class KnowledgeNodeRepository : IKnowledgeNodeRepository
         })
         {
             throw new ValidationException("The specified NodeType does not exist.");
+        }
+        catch (DbUpdateException ex) when (ex.InnerException is PostgresException
+        {
+            SqlState: PostgresErrorCodes.UniqueViolation,
+            ConstraintName: "pk_knowledge_node_media"
+        })
+        {
+            throw new ValidationException("A media entry with that key already exists for this KnowledgeNode.");
+        }
+        catch (DbUpdateException ex) when (ex.InnerException is PostgresException
+        {
+            SqlState: PostgresErrorCodes.UniqueViolation,
+            ConstraintName: "uq_knowledge_node_media_media_asset_id"
+        })
+        {
+            throw new ValidationException("The specified MediaAsset is already linked to another KnowledgeNode.");
         }
     }
 }

@@ -120,6 +120,35 @@ public class KnowledgeNodesControllerTests
     }
 
     [Test]
+    public async Task Create_WithMedia_PassesMediaDictionaryThroughUnchanged()
+    {
+        var nodeTypeId = Guid.NewGuid();
+        var media = new Dictionary<string, JsonObject?> { ["flag"] = new JsonObject { ["id"] = Guid.NewGuid().ToString(), ["alt_text"] = "Flag of France" } };
+        var created = new KnowledgeNode { Id = Guid.NewGuid(), NodeTypeId = nodeTypeId, CanonicalName = "France" };
+        _repository.Setup(r => r.CreateAsync(It.Is<KnowledgeNode>(n => n.Media == media)))
+            .ReturnsAsync(created);
+
+        var result = await _controller.Create(new KnowledgeNodeRequest(nodeTypeId, "France", null, null, media));
+
+        var createdResult = result as CreatedResult;
+        Assert.That(createdResult, Is.Not.Null);
+        Assert.That(createdResult!.Value, Is.SameAs(created));
+    }
+
+    [Test]
+    public async Task Create_WithNullMedia_PassesEmptyDictionaryToRepository()
+    {
+        var nodeTypeId = Guid.NewGuid();
+        _repository.Setup(r => r.CreateAsync(It.Is<KnowledgeNode>(n => n.Media!.Count == 0)))
+            .ReturnsAsync(new KnowledgeNode { Id = Guid.NewGuid(), NodeTypeId = nodeTypeId, CanonicalName = "Mercury" });
+
+        var result = await _controller.Create(new KnowledgeNodeRequest(nodeTypeId, "Mercury", null));
+
+        Assert.That(result, Is.InstanceOf<CreatedResult>());
+        _repository.Verify(r => r.CreateAsync(It.Is<KnowledgeNode>(n => n.Media!.Count == 0)), Times.Once);
+    }
+
+    [Test]
     public async Task Create_WhenRepositoryThrowsValidationException_ReturnsProblem400()
     {
         _repository.Setup(r => r.CreateAsync(It.IsAny<KnowledgeNode>()))
@@ -133,6 +162,23 @@ public class KnowledgeNodesControllerTests
         var problem = objectResult.Value as ProblemDetails;
         Assert.That(problem, Is.Not.Null);
         Assert.That(problem!.Detail, Is.EqualTo("A KnowledgeNode with the same NodeType and CanonicalName already exists."));
+    }
+
+    [Test]
+    public async Task Create_WhenRepositoryThrowsValidationExceptionForAlreadyLinkedMediaAsset_ReturnsProblem400()
+    {
+        _repository.Setup(r => r.CreateAsync(It.IsAny<KnowledgeNode>()))
+            .ThrowsAsync(new ValidationException("The specified MediaAsset is already linked to another KnowledgeNode."));
+
+        var result = await _controller.Create(new KnowledgeNodeRequest(Guid.NewGuid(), "Mercury", null, null,
+            new Dictionary<string, JsonObject?> { ["flag"] = new JsonObject { ["id"] = Guid.NewGuid().ToString(), ["alt_text"] = "x" } }));
+
+        var objectResult = result as ObjectResult;
+        Assert.That(objectResult, Is.Not.Null);
+        Assert.That(objectResult!.StatusCode, Is.EqualTo(400));
+        var problem = objectResult.Value as ProblemDetails;
+        Assert.That(problem, Is.Not.Null);
+        Assert.That(problem!.Detail, Is.EqualTo("The specified MediaAsset is already linked to another KnowledgeNode."));
     }
 
     [Test]
@@ -159,6 +205,22 @@ public class KnowledgeNodesControllerTests
             .ReturnsAsync(updated);
 
         var result = await _controller.Update(id, new KnowledgeNodeRequest(Guid.NewGuid(), "France", null, attributes));
+
+        var ok = result as OkObjectResult;
+        Assert.That(ok, Is.Not.Null);
+        Assert.That(ok!.Value, Is.SameAs(updated));
+    }
+
+    [Test]
+    public async Task Update_WithMedia_PassesMediaDictionaryThroughUnchanged()
+    {
+        var id = Guid.NewGuid();
+        var media = new Dictionary<string, JsonObject?> { ["flag"] = new JsonObject { ["id"] = Guid.NewGuid().ToString(), ["alt_text"] = "Flag of France" } };
+        var updated = new KnowledgeNode { Id = id, CanonicalName = "France" };
+        _repository.Setup(r => r.UpdateAsync(It.Is<KnowledgeNode>(n => n.Id == id && n.Media == media)))
+            .ReturnsAsync(updated);
+
+        var result = await _controller.Update(id, new KnowledgeNodeRequest(Guid.NewGuid(), "France", null, null, media));
 
         var ok = result as OkObjectResult;
         Assert.That(ok, Is.Not.Null);

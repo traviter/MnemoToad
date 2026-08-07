@@ -5,8 +5,10 @@ Feature: KnowledgeNode API
     * url baseUrl
     * def uniqueName = read('classpath:com/mnemotoad/knowledge/common/util.js')
     * def nodeTypeFixtures = call read('classpath:com/mnemotoad/knowledge/nodetype/fixtures.js')
+    * def mediaAssetFixtures = call read('classpath:com/mnemotoad/knowledge/mediaasset/fixtures.js')
     * def knowledgeNodeFixtures = call read('fixtures.js')
     * def createNodeType = nodeTypeFixtures.create
+    * def createMediaAsset = mediaAssetFixtures.create
     * def createKnowledgeNode = knowledgeNodeFixtures.create
     * configure afterScenario =
       """
@@ -15,6 +17,7 @@ Feature: KnowledgeNode API
         // knowledge_node.node_type_id would otherwise reject the NodeType delete.
         knowledgeNodeFixtures.cleanup();
         nodeTypeFixtures.cleanup();
+        mediaAssetFixtures.cleanup();
       }
       """
 
@@ -240,3 +243,102 @@ Feature: KnowledgeNode API
     When method get
     Then status 200
     And match response == {}
+
+  Scenario: Create a knowledge node with media embeds the stored stanza
+    * def nodeType = createNodeType()
+    * def mediaAsset = createMediaAsset()
+    * def name = uniqueName('KnowledgeNode')
+
+    Given path 'nodes'
+    And request { nodeTypeId: '#(nodeType.response.id)', canonicalName: '#(name)', media: { flag: { id: '#(mediaAsset.response.id)', alt_text: 'Flag of France' } } }
+    When method post
+    Then status 201
+    And match response.media.flag.id == mediaAsset.response.id
+    And match response.media.flag.alt_text == 'Flag of France'
+    * eval knowledgeNodeFixtures.stageForCleanup(response.id)
+
+  Scenario: Create a knowledge node with media preserves arbitrary extra fields
+    * def nodeType = createNodeType()
+    * def mediaAsset = createMediaAsset()
+    * def name = uniqueName('KnowledgeNode')
+
+    Given path 'nodes'
+    And request { nodeTypeId: '#(nodeType.response.id)', canonicalName: '#(name)', media: { flag: { id: '#(mediaAsset.response.id)', alt_text: 'Flag of France', other_metadata: 2323 } } }
+    When method post
+    Then status 201
+    And match response.media.flag.other_metadata == 2323
+    * eval knowledgeNodeFixtures.stageForCleanup(response.id)
+
+  Scenario: Get a knowledge node by id returns its media
+    * def nodeType = createNodeType()
+    * def mediaAsset = createMediaAsset()
+    * def created = createKnowledgeNode({ nodeTypeId: nodeType.response.id, media: { flag: { id: mediaAsset.response.id, alt_text: 'Flag of France' } } })
+
+    Given path 'nodes', created.response.id
+    When method get
+    Then status 200
+    And match response.media.flag.id == mediaAsset.response.id
+    And match response.media.flag.alt_text == 'Flag of France'
+
+  Scenario: Reject creation with a media entry missing id
+    * def nodeType = createNodeType()
+
+    Given path 'nodes'
+    And request { nodeTypeId: '#(nodeType.response.id)', canonicalName: '#(uniqueName("KnowledgeNode"))', media: { flag: { alt_text: 'Flag of France' } } }
+    When method post
+    Then status 400
+
+  Scenario: Reject creation with a media entry missing alt_text
+    * def nodeType = createNodeType()
+    * def mediaAsset = createMediaAsset()
+
+    Given path 'nodes'
+    And request { nodeTypeId: '#(nodeType.response.id)', canonicalName: '#(uniqueName("KnowledgeNode"))', media: { flag: { id: '#(mediaAsset.response.id)' } } }
+    When method post
+    Then status 400
+
+  Scenario: Reject creation reusing a media asset already linked to another node
+    * def nodeType = createNodeType()
+    * def mediaAsset = createMediaAsset()
+    * def created = createKnowledgeNode({ nodeTypeId: nodeType.response.id, media: { flag: { id: mediaAsset.response.id, alt_text: 'Flag of France' } } })
+
+    Given path 'nodes'
+    And request { nodeTypeId: '#(nodeType.response.id)', canonicalName: '#(uniqueName("KnowledgeNode"))', media: { flag: { id: '#(mediaAsset.response.id)', alt_text: 'Reused' } } }
+    When method post
+    Then status 400
+
+  Scenario: Update a knowledge node fully replaces its media
+    * def nodeType = createNodeType()
+    * def flagAsset = createMediaAsset()
+    * def photoAsset = createMediaAsset()
+    * def created = createKnowledgeNode({ nodeTypeId: nodeType.response.id, media: { flag: { id: flagAsset.response.id, alt_text: 'Flag of France' } } })
+
+    Given path 'nodes', created.response.id
+    And request { nodeTypeId: '#(nodeType.response.id)', canonicalName: '#(created.response.canonicalName)', media: { photo: { id: '#(photoAsset.response.id)', alt_text: 'Eiffel Tower' } } }
+    When method put
+    Then status 200
+    And match response.media == { photo: { id: '#(photoAsset.response.id)', alt_text: 'Eiffel Tower' } }
+
+  Scenario: Update a knowledge node with no media clears the existing media
+    * def nodeType = createNodeType()
+    * def mediaAsset = createMediaAsset()
+    * def created = createKnowledgeNode({ nodeTypeId: nodeType.response.id, media: { flag: { id: mediaAsset.response.id, alt_text: 'Flag of France' } } })
+
+    Given path 'nodes', created.response.id
+    And request { nodeTypeId: '#(nodeType.response.id)', canonicalName: '#(created.response.canonicalName)' }
+    When method put
+    Then status 200
+    And match response.media == {}
+
+  Scenario: Delete a knowledge node that still has media cascades and succeeds
+    * def nodeType = createNodeType()
+    * def mediaAsset = createMediaAsset()
+    * def created = createKnowledgeNode({ nodeTypeId: nodeType.response.id, media: { flag: { id: mediaAsset.response.id, alt_text: 'Flag of France' } } })
+
+    Given path 'nodes', created.response.id
+    When method delete
+    Then status 204
+
+    Given path 'nodes', created.response.id
+    When method get
+    Then status 404

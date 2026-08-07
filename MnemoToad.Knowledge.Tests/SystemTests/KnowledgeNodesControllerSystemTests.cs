@@ -96,6 +96,117 @@ public class KnowledgeNodesControllerSystemTests
     }
 
     [Test]
+    public async Task Create_WithMedia_RoundTripsStanzaThroughTheRealStack()
+    {
+        var nodeType = await _factory.Db.CreateNodeTypeAsync();
+        var mediaAssetId = Guid.NewGuid();
+
+        var createResponse = await _client.PostAsJsonAsync("/nodes", new KnowledgeNodeRequest(nodeType.Id, "France", null, null,
+            new Dictionary<string, JsonObject?> { ["flag"] = new JsonObject { ["id"] = mediaAssetId.ToString(), ["alt_text"] = "Flag of France" } }));
+        var created = await createResponse.Content.ReadFromJsonAsync<KnowledgeNode>();
+
+        Assert.That(createResponse.StatusCode, Is.EqualTo(HttpStatusCode.Created));
+        Assert.That(created!.Media!["flag"]!["id"]!.GetValue<string>(), Is.EqualTo(mediaAssetId.ToString()));
+        Assert.That(created.Media!["flag"]!["alt_text"]!.GetValue<string>(), Is.EqualTo("Flag of France"));
+
+        var getResponse = await _client.GetAsync($"/nodes/{created.Id}");
+        var fetched = await getResponse.Content.ReadFromJsonAsync<KnowledgeNode>();
+        Assert.That(fetched!.Media!["flag"]!["id"]!.GetValue<string>(), Is.EqualTo(mediaAssetId.ToString()));
+    }
+
+    [Test]
+    public async Task Create_WithMediaExtraFields_RoundTripsArbitraryMetadataThroughTheRealStack()
+    {
+        var nodeType = await _factory.Db.CreateNodeTypeAsync();
+        var mediaAssetId = Guid.NewGuid();
+
+        var createResponse = await _client.PostAsJsonAsync("/nodes", new KnowledgeNodeRequest(nodeType.Id, "France", null, null,
+            new Dictionary<string, JsonObject?>
+            {
+                ["flag"] = new JsonObject { ["id"] = mediaAssetId.ToString(), ["alt_text"] = "Flag of France", ["other_metadata"] = 2323 }
+            }));
+        var created = await createResponse.Content.ReadFromJsonAsync<KnowledgeNode>();
+
+        Assert.That(createResponse.StatusCode, Is.EqualTo(HttpStatusCode.Created));
+        Assert.That(created!.Media!["flag"]!["other_metadata"]!.GetValue<int>(), Is.EqualTo(2323));
+
+        var getResponse = await _client.GetAsync($"/nodes/{created.Id}");
+        var fetched = await getResponse.Content.ReadFromJsonAsync<KnowledgeNode>();
+        Assert.That(fetched!.Media!["flag"]!["other_metadata"]!.GetValue<int>(), Is.EqualTo(2323));
+    }
+
+    [Test]
+    public async Task Update_MediaFullReplace_RemovesOmittedKeyAndAddsNewOne()
+    {
+        var nodeType = await _factory.Db.CreateNodeTypeAsync();
+        var createResponse = await _client.PostAsJsonAsync("/nodes", new KnowledgeNodeRequest(nodeType.Id, "France", null, null,
+            new Dictionary<string, JsonObject?> { ["flag"] = new JsonObject { ["id"] = Guid.NewGuid().ToString(), ["alt_text"] = "Flag of France" } }));
+        var created = await createResponse.Content.ReadFromJsonAsync<KnowledgeNode>();
+
+        var updateResponse = await _client.PutAsJsonAsync($"/nodes/{created!.Id}", new KnowledgeNodeRequest(nodeType.Id, "France", null, null,
+            new Dictionary<string, JsonObject?> { ["photo"] = new JsonObject { ["id"] = Guid.NewGuid().ToString(), ["alt_text"] = "Eiffel Tower" } }));
+        var updated = await updateResponse.Content.ReadFromJsonAsync<KnowledgeNode>();
+
+        Assert.That(updateResponse.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        Assert.That(updated!.Media!.Keys, Is.EquivalentTo(new[] { "photo" }));
+    }
+
+    [Test]
+    public async Task Create_WithMediaEntryMissingId_Returns400()
+    {
+        var nodeType = await _factory.Db.CreateNodeTypeAsync();
+
+        var response = await _client.PostAsJsonAsync("/nodes", new KnowledgeNodeRequest(nodeType.Id, "France", null, null,
+            new Dictionary<string, JsonObject?> { ["flag"] = new JsonObject { ["alt_text"] = "Flag of France" } }));
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+        var problem = await response.Content.ReadFromJsonAsync<ProblemDetails>();
+        Assert.That(problem!.Detail, Is.EqualTo("The media entry 'flag' must include a valid 'id'."));
+    }
+
+    [Test]
+    public async Task Create_WithMediaEntryMissingAltText_Returns400()
+    {
+        var nodeType = await _factory.Db.CreateNodeTypeAsync();
+
+        var response = await _client.PostAsJsonAsync("/nodes", new KnowledgeNodeRequest(nodeType.Id, "France", null, null,
+            new Dictionary<string, JsonObject?> { ["flag"] = new JsonObject { ["id"] = Guid.NewGuid().ToString() } }));
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+        var problem = await response.Content.ReadFromJsonAsync<ProblemDetails>();
+        Assert.That(problem!.Detail, Is.EqualTo("The media entry 'flag' must include a valid 'alt_text'."));
+    }
+
+    [Test]
+    public async Task Create_WhenRepositoryHitsMediaAssetUniqueViolation_Returns400()
+    {
+        var nodeType = await _factory.Db.CreateNodeTypeAsync();
+        _factory.Db.ThrowOnSaveChanges(PostgresExceptionFactory.UniqueViolation(constraintName: "uq_knowledge_node_media_media_asset_id"));
+
+        var response = await _client.PostAsJsonAsync("/nodes", new KnowledgeNodeRequest(nodeType.Id, "France", null, null,
+            new Dictionary<string, JsonObject?> { ["flag"] = new JsonObject { ["id"] = Guid.NewGuid().ToString(), ["alt_text"] = "x" } }));
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+        var problem = await response.Content.ReadFromJsonAsync<ProblemDetails>();
+        Assert.That(problem!.Detail, Is.EqualTo("The specified MediaAsset is already linked to another KnowledgeNode."));
+    }
+
+    [Test]
+    public async Task Update_WhenRepositoryHitsMediaAssetUniqueViolation_Returns400()
+    {
+        var nodeType = await _factory.Db.CreateNodeTypeAsync();
+        var knowledgeNode = await _factory.Db.CreateKnowledgeNodeAsync(nodeType.Id);
+        _factory.Db.ThrowOnSaveChanges(PostgresExceptionFactory.UniqueViolation(constraintName: "uq_knowledge_node_media_media_asset_id"));
+
+        var response = await _client.PutAsJsonAsync($"/nodes/{knowledgeNode.Id}", new KnowledgeNodeRequest(nodeType.Id, "France", null, null,
+            new Dictionary<string, JsonObject?> { ["flag"] = new JsonObject { ["id"] = Guid.NewGuid().ToString(), ["alt_text"] = "x" } }));
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+        var problem = await response.Content.ReadFromJsonAsync<ProblemDetails>();
+        Assert.That(problem!.Detail, Is.EqualTo("The specified MediaAsset is already linked to another KnowledgeNode."));
+    }
+
+    [Test]
     public async Task Create_WithArrayAttributeValue_Returns400()
     {
         var nodeType = await _factory.Db.CreateNodeTypeAsync();

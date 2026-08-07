@@ -10,6 +10,8 @@ public interface IAppDbContext : IDisposable
     DbSet<RelationshipType> RelationshipType { get; }
     DbSet<KnowledgeRelation> KnowledgeRelation { get; }
     DbSet<KnowledgeNodeAttribute> KnowledgeNodeAttribute { get; }
+    DbSet<MediaAsset> MediaAsset { get; }
+    DbSet<KnowledgeNodeMedia> KnowledgeNodeMedia { get; }
 
     Task<int> SaveChangesAsync();
     Task<int> ExecuteDeleteAsync<TEntity>(IQueryable<TEntity> query) where TEntity : class;

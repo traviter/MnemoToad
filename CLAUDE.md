@@ -476,6 +476,126 @@
   - `GET /nodes` (list) does **not** populate `Attributes` (stays the bare per-row shape); only
     `GET /nodes/{id}` does — a deliberate choice to avoid the extra query cost across a
     potentially-large list for a shape list views likely don't need.
+- **`MediaAsset`/`KnowledgeNodeMedia`** (scripts `011_CreateMediaAssetTable.sql`,
+  `012_CreateKnowledgeNodeMediaTable.sql`) is the second normalized "node fact" table, added right
+  after `KnowledgeNodeAttribute`. Went through several redesigns before landing here — see the
+  superseded-design bullets below for what changed and why, since more than one earlier shape is
+  referenced elsewhere in commit history and it's easy to assume the wrong one still applies.
+  - **No `MediaRole` lookup table.** The original design sketch in
+    `MnemoToad.Platform/docs/architecture.html` had a `media_role` table (open vocabulary:
+    flag/photo/pronunciation) that `knowledge_node_media` FK'd into alongside `media_asset` — dropped
+    before ever being built. `knowledge_node_media.key` (a plain `VARCHAR(100)`, same type as
+    `knowledge_node_attribute.key`) replaces `media_role_id` directly, and `(knowledge_node_id, key)`
+    is the composite primary key (`pk_knowledge_node_media`) — no separate `id` column, exactly like
+    `knowledge_node_attribute`.
+  - **`media_asset` is just `id` and `url` — a deliberately temporary table.** No `source` column
+    (dropped from the original architecture-doc sketch before it was ever built — nothing to
+    distinguish third-party vs. self-hosted URLs yet). No `alt_text` either — that moved to
+    `knowledge_node_media` (see below). No `CreatedUtc`/`ModifiedUtc`, matching `NodeType`/
+    `RelationshipType` rather than `KnowledgeNode`. The user's own framing: "Eventually the media
+    table will go away because we're just going to have a separate media server" — `media_asset` and
+    everything referencing it by ID is a stepping stone, not a permanent design.
+  - `MediaAssetsController` (`[Route("mediaAssets")]`) has `GET {id}`/`POST`/`PUT`/`DELETE` — no
+    `GET` (list-all). **`IMediaAssetRepository`/`MediaAssetRepository` deliberately have no
+    `GetAllAsync`** — the user flagged the unbounded `GetAllAsync`-per-repository pattern (every
+    other repository in this codebase has one, e.g. `NodeTypeRepository.GetAllAsync`) as something
+    they want cleaned up generally, and asked for `MediaAsset` to go first as a single-entity pass
+    rather than touching every repository at once. The other repositories' `GetAllAsync` methods are
+    unchanged for now — don't assume this is a green light to remove them elsewhere without being
+    asked. `MediaAssetRepository` can't violate any constraint (no unique columns, no outgoing FKs —
+    see the no-FK bullet below), so its controller has no `ValidationException` try/catch at all,
+    same as `KnowledgeRelationsController.Delete`'s "nothing to catch" precedent — that includes
+    `DeleteAsync` (`_db.ExecuteDeleteAsync(_db.MediaAsset.Where(m => m.Id == id)) > 0`, same one-liner
+    shape as `KnowledgeRelationRepository.DeleteAsync`): nothing references `media_asset` by FK
+    anymore (see below), so a delete can't be blocked by anything referencing it. `DELETE` was added
+    after the no-DELETE version above shipped — its absence was quietly blocking Karate's
+    `mediaasset/` fixture cleanup (see "Karate tests" below), and the user asked for both the
+    endpoint and, going forward, an explicit heads-up whenever a design leaves test fixtures unable
+    to clean up what they create.
+  - **`knowledge_node_media` has no FK to `media_asset` at all.** Dropped deliberately — "media
+    lookup is going to be on a different server anyway eventually," so validating a `media_asset_id`
+    against the local table is pointless/premature work the API doesn't need to own. This is a
+    reversal of the original spec ("fail with 400 if an invalid/non-existent media_asset is
+    associated") — a `mediaAssetId` that doesn't correspond to any real `MediaAsset` row is
+    accepted without complaint. `media_asset_id` still gets a **global** `CONSTRAINT
+    uq_knowledge_node_media_media_asset_id UNIQUE (media_asset_id)`, though — each `MediaAsset` can
+    back at most one `knowledge_node_media` row, ever, across every node and key. This reverses the
+    feature's *original* goal ("multiple nodes can point to the same media entry") — confirmed
+    explicitly by the user, not an oversight. Plain (not `DEFERRABLE`) — media is never expected to
+    move between rows within one update, so the extra complexity a deferred constraint would need
+    isn't warranted.
+  - **`KnowledgeNode.Media` is `Dictionary<string, JsonObject?>?`, mapped to `knowledge_node_media.metadata`
+    (`jsonb`) — the single canonical shape for a media entry, in both directions, exactly mirroring
+    how `KnowledgeNodeAttribute.Value` (`JsonValue?`) drives `Attributes`.** `KnowledgeNodeRequest.Media`
+    is the *same type*, so `KnowledgeNodesController.Create`/`Update` just do
+    `Media = request.Media ?? new()` — no shell-object translation, no second repository parameter.
+    (An earlier version tried both of those approaches in turn, when `Media`'s read shape — a full
+    `MediaAsset` object — and write shape — a bare `mediaAssetId` — genuinely differed; that
+    asymmetry is gone now that the wire shape is the same object both ways, so both workarounds were
+    removed.) The `Metadata`↔`jsonb` conversion in `AppDbContext.OnModelCreating` is a direct
+    `JsonObject`/`.AsObject()` copy of `KnowledgeNodeAttribute.Value`'s `JsonValue`/`.AsValue()`
+    conversion (same `HasConversion`/`ValueComparer` shape, see the `Attributes` bullet above) —
+    unlike `Value`, there's no `ScalarJsonValueConverter`-equivalent restricting `Metadata` to
+    scalars; an object is required (it must carry `id`), and arbitrary nested content beyond that is
+    the whole point (see below).
+  - **The entire per-key stanza — `id`, `alt_text`, and any other client-supplied fields — is stored
+    verbatim in `metadata`, not just the fields the API happens to care about.** The user's framing:
+    "if it's easiest, maybe just store the entire stanza since denormalizing the ID and alt_text
+    isn't that much data." `KnowledgeNodeRepository`'s private `ExtractMediaFields(key, stanza)`
+    pulls `id` (required — parsed as a `Guid`) and `alt_text` (required — "Accessibility is a
+    requirement," validated identically to `id`, not treated as optional) out into their own real
+    `media_asset_id`/`alt_text` columns for future querying, but `Metadata` is assigned the whole
+    incoming `JsonObject` as-is, redundancy and all — a `GET` response for that key is just
+    `metadata` read back, not reconstructed from the two extracted columns. A missing or
+    wrong-typed `id`/`alt_text` throws `ValidationException` (`"The media entry '{key}' must include
+    a valid 'id'."` / `"...'alt_text'."`), caught by the controller's existing
+    `ValidationException → 400` pattern, same as every other repository-level validation failure —
+    even though this specific check isn't a DB constraint translation (nothing for Postgres to catch
+    here; the row can't even be built yet), it still belongs in the repository, consistent with
+    "repository owns write-time translation, no service layer."
+  - **Extracting `id` reads it as a string first, then `Guid.TryParse`s it — deliberately not
+    `JsonValue.TryGetValue<Guid>()` directly.** `System.Text.Json.Nodes.JsonValue.TryGetValue<T>()`
+    only performs real conversion (e.g. GUID-formatted-string → `Guid`) when the node is backed by a
+    parsed `JsonElement` (i.e., it arrived via real JSON deserialization, as every actual HTTP
+    request does) — a `JsonValue` built directly in C# via object-initializer syntax (as test helpers
+    and `DbFixtures` do) wraps the raw CLR value instead, and `TryGetValue<Guid>()` on a
+    string-backed one always returns `false` regardless of whether the string is a valid GUID. Going
+    through `TryGetValue<string>()` (which succeeds either way) plus `Guid.TryParse` sidesteps that
+    representation difference entirely, so the same extraction logic behaves identically whether the
+    `JsonObject` came from a real request body or was constructed directly in-process.
+  - **`fk_knowledge_node_media_knowledge_node_id` is `ON DELETE CASCADE`** — deleting a
+    `KnowledgeNode` that still has `KnowledgeNodeMedia` rows deletes those rows too, rather than
+    failing. A `KnowledgeNodeMedia` row has no independent existence outside the node it's attached
+    to. Without this, `KnowledgeNodeRepository.DeleteAsync`'s
+    `ExecuteDeleteAsync(_db.KnowledgeNode.Where(...))` would throw an uncaught `DbUpdateException`
+    (surfacing as a raw 500) the moment a node being deleted still had any media attached — caught
+    during manual testing, not by the SQLite-backed repository tests, since `AppDbContext` has no FK
+    modeled at the EF level at all (see "Database" above) and SQLite's in-memory provider doesn't
+    enforce one either, so nothing in that layer could have caught it. `knowledge_node_attribute` has
+    the exact same gap (no `ON DELETE CASCADE`, same `ExecuteDeleteAsync` code path) and is not yet
+    fixed — deliberately out of scope here, tracked separately. No C# change was needed for the media
+    fix — it's pure DDL, so `DeleteAsync` itself is untouched, and no NUnit repository test was added
+    either: the whole reason the gap could exist undetected in that test layer is that DB-level
+    FK/cascade behavior lives purely in the DbUp SQL and is invisible to the SQLite-backed provider
+    (same limitation already documented for `CreatedUtc`/`ModifiedUtc` under "Karate tests" → "No
+    passthru" below) — only a real-Postgres Karate scenario can actually exercise it.
+  - **There is no nested `GET /nodes/{nodeId}/media` endpoint.** A `KnowledgeNodeMediaController`/
+    `IKnowledgeNodeMediaRepository`/`KnowledgeNodeMediaRepository` briefly existed, structurally
+    mirroring `KnowledgeNodeAttributesController`/`IKnowledgeNodeAttributeRepository`'s nested
+    `GET /nodes/{id}/attributes` — removed once the user pointed out it was pure duplication: `GET
+    /nodes/{id}` already embeds the exact same `Media` dictionary (no join to `media_asset` was ever
+    needed to build either response, so there was never a cost the standalone endpoint was saving).
+    **`KnowledgeNodeAttributesController`'s nested `GET /nodes/{id}/attributes` has the identical
+    redundancy and is a known, deliberate follow-up — not fixed yet, tracked by the user separately.**
+    Don't assume its survival means the media removal was a one-off exception; it's next.
+  - **Superseded design notes**, kept because other memories/commits reference the earlier shapes:
+    an earlier version had `MediaAsset` carrying `alt_text` and embedded a full `MediaAsset` object
+    (including `url`) on `GET`, with `POST`/`PUT` accepting just a `mediaAssetId` per key — that
+    asymmetry needed either a second repository parameter or a "shell `MediaAsset` with only `Id`
+    set" translation layer in the controller (`ToMediaShells`), both since removed. An even earlier
+    version had a real FK from `knowledge_node_media.media_asset_id` to `media_asset(id)`, translated
+    to a 400 on violation — also removed (see the no-FK bullet above). None of that machinery exists
+    anymore; `Metadata`/`JsonObject` is the whole story now.
 
 ## Testing (MnemoToad.Knowledge.Tests)
 - **NUnit + Moq**, not xUnit — a deliberate switch, not the default `dotnet new` choice, so don't
@@ -487,9 +607,10 @@
     mock (see "API patterns" above). `ValidationException`-catch assertions check the returned
     `ObjectResult`'s `StatusCode` is `400` and its `Value` is a `ProblemDetails` with the expected
     `Detail`, matching what the controller actually returns (`Problem(...)`).
-  - **Repository tests** (`MnemoToad.Knowledge.Tests/Repositories/`) exist for all five entities
-    (`NodeTypeRepositoryTests`, `KnowledgeNodeRepositoryTests`, `RelationshipTypeRepositoryTests`,
-    `KnowledgeRelationRepositoryTests`, `KnowledgeNodeAttributeRepositoryTests`) and run query/CRUD
+  - **Repository tests** (`MnemoToad.Knowledge.Tests/Repositories/`) exist for all six entities that
+    have their own repository (`NodeTypeRepositoryTests`, `KnowledgeNodeRepositoryTests`,
+    `RelationshipTypeRepositoryTests`, `KnowledgeRelationRepositoryTests`,
+    `KnowledgeNodeAttributeRepositoryTests`, `MediaAssetRepositoryTests`) and run query/CRUD
     assertions against a real EF Core SQLite
     (`DataSource=:memory:`) database, with constraint violations simulated separately (see
     `MockableAppDbContext` below) — this is the layer where the "let the DB decide" collapse
@@ -549,10 +670,10 @@
   needs `constraintName` to disambiguate its three FKs; `KnowledgeNodeRepository`/
   `RelationshipTypeRepository` need `tableName` to disambiguate a delete-time violation (referenced
   by a `KnowledgeRelation`) from a create-time one (see "Constraint-violation translation" above).
-- **System tests** (`MnemoToad.Knowledge.Tests/SystemTests/`) exist for all five controllers
+- **System tests** (`MnemoToad.Knowledge.Tests/SystemTests/`) exist for all six controllers
   (`NodeTypesControllerSystemTests`, `KnowledgeNodesControllerSystemTests`,
   `RelationshipTypesControllerSystemTests`, `KnowledgeRelationsControllerSystemTests`,
-  `KnowledgeNodeAttributesControllerSystemTests`) and send
+  `KnowledgeNodeAttributesControllerSystemTests`, `MediaAssetsControllerSystemTests`) and send
   real HTTP requests via `HttpClient` — not calling controller action methods directly. This matters
   because ASP.NET Core's automatic `[ApiController]` model-validation filter (DataAnnotations) only
   runs as part of the real MVC pipeline; a direct controller-method call bypasses
@@ -574,7 +695,8 @@
     actually needs (the same `Db` persisting across multiple requests within one test).
   - **`DbFixtures`** (`MnemoToad.Knowledge.Tests/TestSupport/DbFixtures.cs`) — `IAppDbContext` extension methods
     (`CreateNodeTypeAsync`, `CreateKnowledgeNodeAsync`, `CreateRelationshipTypeAsync`,
-    `CreateKnowledgeRelationAsync`, `CreateKnowledgeNodeAttributeAsync`)
+    `CreateKnowledgeRelationAsync`, `CreateKnowledgeNodeAttributeAsync`, `CreateMediaAssetAsync`,
+    `CreateKnowledgeNodeMediaAsync`)
     that insert directly into the in-memory database. System tests use
     these for setup-only preconditions (e.g. a `NodeType` a `KnowledgeNode` test needs to reference)
     and reserve real HTTP calls for whichever endpoint the test is actually exercising — the same
@@ -669,6 +791,22 @@
   NodeType's-guard case as a rule that a referencing entity's delete-guard test always lives in the
   referenced-from package — that was specific to how that scenario was introduced, not a
   generalizable convention.
+- **`mediaasset/` now follows the standard per-entity package convention exactly** (`mediaasset.feature`,
+  `create-mediaasset.feature`, `delete-mediaasset.feature`, `fixtures.js`) — it briefly didn't, when
+  `MediaAssetsController` had no `DELETE` endpoint yet and `fixtures.js`'s `remove` strategy was a
+  no-op (rows created by tests were simply left in the database forever). That gap is why
+  `DELETE /mediaAssets/{id}` was added — see the `MediaAssetsController` bullet under "API patterns"
+  above. `delete-mediaasset.feature` and `fixtures.js`'s `remove` strategy now match every other
+  package's shape exactly, so `mediaasset/` no longer needs calling out as an exception at all.
+  **Lesson generalized beyond this one package:** whenever a design change would leave any fixture's
+  `remove` strategy unable to actually delete what `create` made (a missing endpoint, a blocking
+  constraint, an entity that becomes effectively permanent), that needs to be surfaced to the user
+  explicitly at the time, not just quietly implemented and noted in a comment — see the
+  `feedback_warn_on_uncleanable_test_data` user memory. `knowledgenode.feature`'s `Background` wires
+  `mediaAssetFixtures` the same way it wires `nodeTypeFixtures` (cross-package
+  `classpath:.../mediaasset/fixtures.js` reference, no copy-pasted MediaAsset create logic) for its
+  media-embedding scenarios, and `create-knowledgenode.feature` grew a `media` passthrough argument
+  alongside the existing `attributes` one.
 - No passthru/direct-DB-query endpoint yet — tests validate purely through the API's own responses.
   Add one if a future story needs to assert something the API doesn't surface (e.g. cascade
   behavior at the DB level). Concrete case in hand: `knowledge_node.created_utc`/

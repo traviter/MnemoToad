@@ -65,4 +65,28 @@ internal static class DbFixtures
         await db.SaveChangesAsync();
         return knowledgeNodeAttribute;
     }
+
+    public static async Task<MediaAsset> CreateMediaAssetAsync(this IAppDbContext db, string? url = null)
+    {
+        var mediaAsset = new MediaAsset { Url = url ?? $"https://example.com/{Guid.NewGuid()}.svg" };
+        db.MediaAsset.Add(mediaAsset);
+        await db.SaveChangesAsync();
+        return mediaAsset;
+    }
+
+    public static async Task<KnowledgeNodeMedia> CreateKnowledgeNodeMediaAsync(this IAppDbContext db, Guid knowledgeNodeId, string key, Guid mediaAssetId, string altText, JsonObject? metadata = null)
+    {
+        var stanza = metadata ?? new JsonObject { ["id"] = mediaAssetId.ToString(), ["alt_text"] = altText };
+        var knowledgeNodeMedia = new KnowledgeNodeMedia
+        {
+            KnowledgeNodeId = knowledgeNodeId,
+            Key = key,
+            MediaAssetId = mediaAssetId,
+            AltText = altText,
+            Metadata = stanza
+        };
+        db.KnowledgeNodeMedia.Add(knowledgeNodeMedia);
+        await db.SaveChangesAsync();
+        return knowledgeNodeMedia;
+    }
 }

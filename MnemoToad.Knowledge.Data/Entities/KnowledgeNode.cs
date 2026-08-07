@@ -12,4 +12,7 @@ public class KnowledgeNode
 
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public Dictionary<string, JsonValue?>? Attributes { get; set; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public Dictionary<string, JsonObject?>? Media { get; set; }
 }

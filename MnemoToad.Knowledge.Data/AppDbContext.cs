@@ -15,6 +15,8 @@ public class AppDbContext : DbContext, IAppDbContext
     public DbSet<RelationshipType> RelationshipType => Set<RelationshipType>();
     public DbSet<KnowledgeRelation> KnowledgeRelation => Set<KnowledgeRelation>();
     public DbSet<KnowledgeNodeAttribute> KnowledgeNodeAttribute => Set<KnowledgeNodeAttribute>();
+    public DbSet<MediaAsset> MediaAsset => Set<MediaAsset>();
+    public DbSet<KnowledgeNodeMedia> KnowledgeNodeMedia => Set<KnowledgeNodeMedia>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -34,6 +36,23 @@ public class AppDbContext : DbContext, IAppDbContext
             .Metadata.SetValueComparer(jsonValueComparer);
 
         modelBuilder.Entity<KnowledgeNode>().Ignore(n => n.Attributes);
+
+        var jsonObjectComparer = new ValueComparer<JsonObject?>(
+            (a, b) => (a == null && b == null) || (a != null && b != null && a.ToJsonString() == b.ToJsonString()),
+            v => v == null ? 0 : v.ToJsonString().GetHashCode(),
+            v => v == null ? null : JsonNode.Parse(v.ToJsonString())!.AsObject());
+
+        modelBuilder.Entity<KnowledgeNodeMedia>().HasKey(m => new { m.KnowledgeNodeId, m.Key });
+
+        modelBuilder.Entity<KnowledgeNodeMedia>()
+            .Property(m => m.Metadata)
+            .HasColumnType("jsonb")
+            .HasConversion(
+                v => v == null ? null : v.ToJsonString(),
+                v => v == null ? null : JsonNode.Parse(v)!.AsObject())
+            .Metadata.SetValueComparer(jsonObjectComparer);
+
+        modelBuilder.Entity<KnowledgeNode>().Ignore(n => n.Media);
     }
 
     public Task<int> SaveChangesAsync() => SaveChangesAsync(CancellationToken.None);

@@ -31,6 +31,8 @@ internal sealed class MockableAppDbContext : IAppDbContext
         SetupDefaultExecuteDelete<RelationshipType>();
         SetupDefaultExecuteDelete<KnowledgeRelation>();
         SetupDefaultExecuteDelete<KnowledgeNodeAttribute>();
+        SetupDefaultExecuteDelete<MediaAsset>();
+        SetupDefaultExecuteDelete<KnowledgeNodeMedia>();
     }
 
     private void SetupDefaultExecuteDelete<TEntity>() where TEntity : class =>
@@ -42,6 +44,8 @@ internal sealed class MockableAppDbContext : IAppDbContext
     public DbSet<RelationshipType> RelationshipType => _wrapped.RelationshipType;
     public DbSet<KnowledgeRelation> KnowledgeRelation => _wrapped.KnowledgeRelation;
     public DbSet<KnowledgeNodeAttribute> KnowledgeNodeAttribute => _wrapped.KnowledgeNodeAttribute;
+    public DbSet<MediaAsset> MediaAsset => _wrapped.MediaAsset;
+    public DbSet<KnowledgeNodeMedia> KnowledgeNodeMedia => _wrapped.KnowledgeNodeMedia;
     public Task<int> SaveChangesAsync() => _mock.Object.SaveChangesAsync();
     public Task<int> ExecuteDeleteAsync<TEntity>(IQueryable<TEntity> query) where TEntity : class =>
         _mock.Object.ExecuteDeleteAsync(query);
