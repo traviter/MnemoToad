@@ -15,14 +15,8 @@ public class KnowledgeNodeRepository : IKnowledgeNodeRepository
         _db = db;
     }
 
-    public Task<List<KnowledgeNode>> GetAllAsync(Guid? nodeTypeId = null)
-    {
-        var query = _db.KnowledgeNode.AsQueryable();
-        if (nodeTypeId is not null)
-            query = query.Where(n => n.NodeTypeId == nodeTypeId);
-
-        return query.OrderBy(n => n.CanonicalName).ToListAsync();
-    }
+    public Task<List<KnowledgeNode>> GetAllAsync(Guid nodeTypeId) =>
+        _db.KnowledgeNode.Where(n => n.NodeTypeId == nodeTypeId).OrderBy(n => n.CanonicalName).ToListAsync();
 
     public async Task<KnowledgeNode?> GetByIdAsync(Guid id)
     {

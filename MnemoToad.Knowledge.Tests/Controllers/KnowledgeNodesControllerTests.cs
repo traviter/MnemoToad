@@ -24,19 +24,6 @@ public class KnowledgeNodesControllerTests
     }
 
     [Test]
-    public async Task GetAll_WithNoFilter_ReturnsOkWithAllNodes()
-    {
-        var nodes = new List<KnowledgeNode> { new() { Id = Guid.NewGuid(), CanonicalName = "Mercury" } };
-        _repository.Setup(r => r.GetAllAsync(null)).ReturnsAsync(nodes);
-
-        var result = await _controller.GetAll(null);
-
-        var ok = result as OkObjectResult;
-        Assert.That(ok, Is.Not.Null);
-        Assert.That(ok!.Value, Is.SameAs(nodes));
-    }
-
-    [Test]
     public async Task GetAll_WithNodeTypeIdFilter_PassesFilterToRepository()
     {
         var nodeTypeId = Guid.NewGuid();

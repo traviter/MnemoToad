@@ -310,12 +310,42 @@ public class KnowledgeNodesControllerSystemTests
         var nodeType = await _factory.Db.CreateNodeTypeAsync();
         await _factory.Db.CreateKnowledgeNodeAsync(nodeType.Id);
 
-        var response = await _client.GetAsync("/nodes");
+        var response = await _client.GetAsync($"/nodes?nodeTypeId={nodeType.Id}");
 
         var json = await response.Content.ReadAsStringAsync();
         using var document = JsonDocument.Parse(json);
         Assert.That(document.RootElement.GetArrayLength(), Is.GreaterThan(0));
         Assert.That(document.RootElement[0].TryGetProperty("attributes", out _), Is.False);
+    }
+
+    [Test]
+    public async Task GetAll_WithEmptyGuidNodeTypeId_ReturnsOkWithEmptyList()
+    {
+        var response = await _client.GetAsync("/nodes?nodeTypeId=00000000-0000-0000-0000-000000000000");
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var nodes = await response.Content.ReadFromJsonAsync<List<KnowledgeNode>>();
+        Assert.That(nodes, Is.Empty);
+    }
+
+    [Test]
+    public async Task GetAll_WithMissingNodeTypeId_Returns400WithValidationErrors()
+    {
+        var response = await _client.GetAsync("/nodes");
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+        var problem = await response.Content.ReadFromJsonAsync<ValidationProblemDetails>();
+        Assert.That(problem!.Errors, Contains.Key("nodeTypeId"));
+    }
+
+    [Test]
+    public async Task GetAll_WithInvalidNodeTypeId_Returns400WithValidationErrors()
+    {
+        var response = await _client.GetAsync("/nodes?nodeTypeId=not-a-guid");
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+        var problem = await response.Content.ReadFromJsonAsync<ValidationProblemDetails>();
+        Assert.That(problem!.Errors, Contains.Key("nodeTypeId"));
     }
 
     [Test]

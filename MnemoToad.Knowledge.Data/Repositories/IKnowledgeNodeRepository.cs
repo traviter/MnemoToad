@@ -4,7 +4,7 @@ namespace MnemoToad.Knowledge.Data.Repositories;
 
 public interface IKnowledgeNodeRepository
 {
-    Task<List<KnowledgeNode>> GetAllAsync(Guid? nodeTypeId = null);
+    Task<List<KnowledgeNode>> GetAllAsync(Guid nodeTypeId);
     Task<KnowledgeNode?> GetByIdAsync(Guid id);
     Task<KnowledgeNode> CreateAsync(KnowledgeNode knowledgeNode);
     Task<KnowledgeNode?> UpdateAsync(KnowledgeNode knowledgeNode);

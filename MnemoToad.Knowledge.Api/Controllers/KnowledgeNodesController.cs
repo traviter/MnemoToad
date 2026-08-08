@@ -18,8 +18,8 @@ public class KnowledgeNodesController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<IActionResult> GetAll([FromQuery] Guid? nodeTypeId) =>
-        Ok(await _repository.GetAllAsync(nodeTypeId));
+    public async Task<IActionResult> GetAll([FromQuery, Required] Guid? nodeTypeId) =>
+        Ok(await _repository.GetAllAsync(nodeTypeId!.Value));
 
     [HttpGet("{id:guid}")]
     public async Task<IActionResult> GetById(Guid id) =>

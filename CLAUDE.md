@@ -367,9 +367,29 @@
   constraint above already creates a btree index with `node_type_id` as the leading column, which
   Postgres can use directly for an equality lookup on `node_type_id` alone (e.g. `GET
   /nodes?nodeTypeId=...`, the "all nodes of a type" query) — a second single-column index would just
-  be redundant write overhead. `IKnowledgeNodeRepository.GetAllAsync(Guid? nodeTypeId = null)` takes
-  the optional filter directly (not a separate `GetByNodeTypeIdAsync` method) since it's the same
-  query with or without the filter.
+  be redundant write overhead. `IKnowledgeNodeRepository.GetAllAsync(Guid nodeTypeId)` takes the
+  filter directly (not a separate `GetByNodeTypeIdAsync` method) since it's the same query either
+  way.
+  - **`nodeTypeId` is a required query parameter on `GET /nodes` — an unfiltered "every node in the
+    database" response was never wanted, since the dataset is too large.** This reversed an earlier
+    version where `nodeTypeId` was optional and omitting it returned every `KnowledgeNode` row.
+    `KnowledgeNodesController.GetAll`'s parameter is `[FromQuery, Required] Guid? nodeTypeId`, not
+    plain non-nullable `Guid` — **binding a plain `Guid` action parameter (as opposed to a JSON body
+    record's constructor parameter) silently defaults a missing query-string value to `Guid.Empty`
+    with no error at all** (confirmed by probing, not assumed — the equivalent-looking non-nullable
+    `Guid` version of this parameter returned `200 OK` with an empty list for a bare `GET /nodes`,
+    not the `400` the endpoint needs). `Guid?` + `[Required]` gets a real distinction instead: a
+    missing param binds to `null` and `[Required]` rejects it (`400`, `errors["nodeTypeId"]` keyed by
+    the plain parameter name — this is a different failure path than the JSON-body-record case
+    described above, so it does *not* get the `"$.nodeTypeId"`/spurious-`"request"`-key shape that
+    case has), while a syntactically-invalid value (e.g. `nodeTypeId=not-a-guid`) fails during query
+    binding itself, also `400` under the same `errors["nodeTypeId"]` key but a different message
+    ("The value '...' is not valid."). The controller dereferences with
+    `nodeTypeId!.Value` when calling the repository, safe for the same reason the POST/PUT
+    `.Value` dereferences are — validation runs first. **An explicit all-zero GUID
+    (`nodeTypeId=00000000-0000-0000-0000-000000000000`) is still accepted** (`200 OK`, empty
+    result), consistent with the presence-only philosophy established for `KnowledgeNodeRequest`/
+    `KnowledgeRelationRequest` above — "required" means present, not non-default.
 - **`KnowledgeRelation`** (script `009_CreateKnowledgeRelationTable.sql`) links two
   `KnowledgeNode`s through a `RelationshipType` — `SourceNodeId`/`TargetNodeId` FK to
   `knowledge_node(id)`, `RelationshipTypeId` FKs to `relationship_type(id)`, and a composite

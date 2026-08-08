@@ -129,6 +129,7 @@ Feature: KnowledgeNode API
     * def created = createKnowledgeNode({ nodeTypeId: nodeType.response.id })
 
     Given path 'nodes'
+    And param nodeTypeId = nodeType.response.id
     When method get
     Then status 200
     * def found = karate.filter(response, function(x){ return x.id == created.response.id })
@@ -139,6 +140,7 @@ Feature: KnowledgeNode API
     * def created = createKnowledgeNode({ nodeTypeId: nodeType.response.id, attributes: { isoCode: 'FR' } })
 
     Given path 'nodes'
+    And param nodeTypeId = nodeType.response.id
     When method get
     Then status 200
     * def found = karate.filter(response, function(x){ return x.id == created.response.id })
@@ -157,6 +159,24 @@ Feature: KnowledgeNode API
     * def foundIds = karate.map(response, function(x){ return x.id })
     And match foundIds contains created1.response.id
     And match foundIds !contains created2.response.id
+
+  Scenario: Reject listing knowledge nodes with a missing node type id
+    Given path 'nodes'
+    When method get
+    Then status 400
+
+  Scenario: Reject listing knowledge nodes with an invalid node type id
+    Given path 'nodes'
+    And param nodeTypeId = 'not-a-guid'
+    When method get
+    Then status 400
+
+  Scenario: List knowledge nodes with an all-zero node type id returns an empty list
+    Given path 'nodes'
+    And param nodeTypeId = '00000000-0000-0000-0000-000000000000'
+    When method get
+    Then status 200
+    And match response == []
 
   Scenario: Update a knowledge node
     * def nodeType = createNodeType()

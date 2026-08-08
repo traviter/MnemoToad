@@ -30,12 +30,13 @@ public class KnowledgeNodeRepositoryTests
     [Test]
     public async Task GetAllAsync_ReturnsKnowledgeNodesOrderedByCanonicalName()
     {
+        var nodeTypeId = Guid.NewGuid();
         await _db.KnowledgeNode.AddRangeAsync(
-            new KnowledgeNode { Id = Guid.NewGuid(), CanonicalName = "Venus" },
-            new KnowledgeNode { Id = Guid.NewGuid(), CanonicalName = "Mercury" });
+            new KnowledgeNode { Id = Guid.NewGuid(), NodeTypeId = nodeTypeId, CanonicalName = "Venus" },
+            new KnowledgeNode { Id = Guid.NewGuid(), NodeTypeId = nodeTypeId, CanonicalName = "Mercury" });
         await _db.SaveChangesAsync();
 
-        var all = await _repository.GetAllAsync();
+        var all = await _repository.GetAllAsync(nodeTypeId);
 
         Assert.That(all.Select(n => n.CanonicalName), Is.EqualTo(new[] { "Mercury", "Venus" }));
     }
