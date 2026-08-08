@@ -28,9 +28,9 @@ public class KnowledgeRelationsController : ControllerBase
         {
             var created = await _repository.CreateAsync(new KnowledgeRelation
             {
-                SourceNodeId = request.SourceNodeId,
-                RelationshipTypeId = request.RelationshipTypeId,
-                TargetNodeId = request.TargetNodeId
+                SourceNodeId = request.SourceNodeId!.Value,
+                RelationshipTypeId = request.RelationshipTypeId!.Value,
+                TargetNodeId = request.TargetNodeId!.Value
             });
             return Created($"/relationships/{created.Id}", created);
         }

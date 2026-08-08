@@ -241,9 +241,23 @@ public class KnowledgeNodesControllerSystemTests
     }
 
     [Test]
-    public async Task Create_WithEmptyNodeTypeId_Returns400WithValidationErrors()
+    public async Task Create_WithInvalidNodeTypeId_Returns400WithValidationErrors()
     {
-        var response = await _client.PostAsJsonAsync("/nodes", new KnowledgeNodeRequest(Guid.Empty, "Mercury", null));
+        var json = "{\"nodeTypeId\":\"not-a-guid\",\"canonicalName\":\"Mercury\"}";
+
+        var response = await _client.PostAsync("/nodes", new StringContent(json, Encoding.UTF8, "application/json"));
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+        var problem = await response.Content.ReadFromJsonAsync<ValidationProblemDetails>();
+        Assert.That(problem!.Errors, Contains.Key("$.nodeTypeId"));
+    }
+
+    [Test]
+    public async Task Create_WithMissingNodeTypeId_Returns400WithValidationErrors()
+    {
+        var json = "{\"canonicalName\":\"Mercury\"}";
+
+        var response = await _client.PostAsync("/nodes", new StringContent(json, Encoding.UTF8, "application/json"));
 
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
         var problem = await response.Content.ReadFromJsonAsync<ValidationProblemDetails>();

@@ -253,9 +253,8 @@
   check, and still racy under concurrent writes — before both were replaced with just attempting the
   write and translating a constraint failure after the fact. Once every service had shrunk to "no
   orchestration beyond one repository call, plus shape validation," the whole layer was removed: shape
-  validation moved to DataAnnotations on the request DTOs (`[Required]`, plus a custom
-  `RequiredGuidAttribute` — plain `[Required]` doesn't reject `Guid.Empty` on a non-nullable `Guid`),
-  enforced automatically by `[ApiController]`'s model-validation filter before the action even runs,
+  validation moved to DataAnnotations on the request DTOs (`[Required]`), enforced automatically by
+  `[ApiController]`'s model-validation filter before the action even runs,
   returning a `ValidationProblemDetails` 400 with no controller code involved. Repositories collapsed
   each CRUD operation into a single `CreateAsync`/`UpdateAsync`/`DeleteAsync` call doing the full
   fetch → mutate → save unit of work itself (`SaveChangesAsync` became `private`), and controllers now
@@ -270,6 +269,42 @@
   See "Testing" below for how this bypasses `SaveChangesAsync` (and what that meant for constraint-
   violation catches and for the test double). An "update where"-style approach for `UpdateAsync` is
   still a deliberately deferred follow-up (see below), not done yet.
+- **`KnowledgeNodeRequest.NodeTypeId` and `KnowledgeRelationRequest`'s three Guid properties
+  (`SourceNodeId`/`RelationshipTypeId`/`TargetNodeId`) are `Guid?`, not `Guid`, specifically so
+  "field omitted" and "field explicitly sent as an all-zero GUID" are distinguishable — this is a
+  reversal of an earlier design.** The original version used non-nullable `Guid` plus a custom
+  `RequiredGuidAttribute` (`IsValid` was `value is Guid guid && guid != Guid.Empty`), because plain
+  `[Required]` doesn't reject `Guid.Empty` on a non-nullable `Guid` (a struct is never `null`, and
+  `[Required]`'s check is a null check). That attribute was first loosened to accept `Guid.Empty`
+  (per the user: an all-zero GUID is still a syntactically valid GUID — "required" should mean
+  *present*, not *non-default*, and the attribute was conflating the two), which made it
+  functionally inert for these non-nullable properties: System.Text.Json silently defaults an
+  omitted JSON property to `Guid.Empty` for a non-nullable `Guid` constructor parameter, so once
+  `Guid.Empty` is accepted there's no remaining way to reject an omitted field either. Rather than
+  leave "missing nodeTypeId" entirely unvalidated, the properties were changed to `Guid?` with a
+  plain `[Required]` — omission now binds to `null` (rejected by `[Required]`), while an explicit
+  `00000000-0000-0000-0000-000000000000` binds to a real, accepted `Guid.Empty` value, same as any
+  other GUID. `RequiredGuidAttribute` has no remaining callers and was deleted outright rather than
+  kept unused. Controllers dereference these with `.Value` (e.g.
+  `NodeTypeId = request.NodeTypeId!.Value`) when building the entity — safe because
+  `[ApiController]`'s automatic model validation guarantees non-null by the time the action body
+  runs. Karate's `knowledgenode.feature`/`knowledgerelation.feature`, and the matching NUnit system
+  tests (`KnowledgeNodesControllerSystemTests`/`KnowledgeRelationsControllerSystemTests`), each carry
+  two cases per field now instead of one: an "invalid" case (a non-GUID string, fails GUID parsing
+  during JSON body binding — a `400` unrelated to `[Required]`) and a "missing" case (the key omitted
+  from the request JSON entirely — a `400` from `[Required]` catching the resulting `null`). The
+  system tests can't send a malformed value through the strongly-typed `KnowledgeNodeRequest`/
+  `KnowledgeRelationRequest` records at all (the constructor only accepts a real `Guid?`), so both
+  cases post a raw JSON string via `StringContent`/`PostAsync` instead of the usual
+  `PostAsJsonAsync(..., new KnowledgeNodeRequest(...))` — same technique
+  `Create_WithObjectAttributeValue_Returns400` already used for a different malformed-body case.
+  **The two cases surface under different `ValidationProblemDetails.Errors` keys, confirmed by
+  probing rather than assumed:** a genuinely-missing field's error is keyed by the plain PascalCase
+  property name (e.g. `"NodeTypeId"`, from `[Required]` running against the successfully-deserialized
+  record), while an invalid-format value's error is keyed `"$.nodeTypeId"` (a JSON-path, from the
+  System.Text.Json input formatter failing to convert the value at all — deserialization never
+  reaches the point of building a `KnowledgeNodeRequest` to validate, so a second, unrelated
+  `"request"` key ("The request field is required.") also appears in the same response).
 - Controller actions catch `ValidationException` (thrown by the repository — see
   "Constraint-violation translation" below) and return
   `Problem(detail: ex.Message, statusCode: StatusCodes.Status400BadRequest)`, an RFC 7807

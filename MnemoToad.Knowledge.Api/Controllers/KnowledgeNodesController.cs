@@ -32,7 +32,7 @@ public class KnowledgeNodesController : ControllerBase
         {
             var created = await _repository.CreateAsync(new KnowledgeNode
             {
-                NodeTypeId = request.NodeTypeId,
+                NodeTypeId = request.NodeTypeId!.Value,
                 CanonicalName = request.CanonicalName,
                 Description = request.Description,
                 Attributes = request.Attributes ?? new(),
@@ -54,7 +54,7 @@ public class KnowledgeNodesController : ControllerBase
             var updated = await _repository.UpdateAsync(new KnowledgeNode
             {
                 Id = id,
-                NodeTypeId = request.NodeTypeId,
+                NodeTypeId = request.NodeTypeId!.Value,
                 CanonicalName = request.CanonicalName,
                 Description = request.Description,
                 Attributes = request.Attributes ?? new(),

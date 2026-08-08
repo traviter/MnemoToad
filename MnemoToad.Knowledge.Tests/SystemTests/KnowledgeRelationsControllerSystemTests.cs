@@ -5,6 +5,7 @@ using MnemoToad.Knowledge.Tests.TestSupport;
 using NUnit.Framework;
 using System.Net;
 using System.Net.Http.Json;
+using System.Text;
 
 namespace MnemoToad.Knowledge.Tests.SystemTests;
 
@@ -52,14 +53,75 @@ public class KnowledgeRelationsControllerSystemTests
     }
 
     [Test]
-    public async Task Create_WithEmptySourceNodeId_Returns400WithValidationErrors()
+    public async Task Create_WithInvalidSourceNodeId_Returns400WithValidationErrors()
     {
-        var response = await _client.PostAsJsonAsync("/relationships",
-            new KnowledgeRelationRequest(Guid.Empty, Guid.NewGuid(), Guid.NewGuid()));
+        var json = "{\"sourceNodeId\":\"not-a-guid\",\"relationshipTypeId\":\"" + Guid.NewGuid() + "\",\"targetNodeId\":\"" + Guid.NewGuid() + "\"}";
+
+        var response = await _client.PostAsync("/relationships", new StringContent(json, Encoding.UTF8, "application/json"));
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+        var problem = await response.Content.ReadFromJsonAsync<ValidationProblemDetails>();
+        Assert.That(problem!.Errors, Contains.Key("$.sourceNodeId"));
+    }
+
+    [Test]
+    public async Task Create_WithMissingSourceNodeId_Returns400WithValidationErrors()
+    {
+        var json = "{\"relationshipTypeId\":\"" + Guid.NewGuid() + "\",\"targetNodeId\":\"" + Guid.NewGuid() + "\"}";
+
+        var response = await _client.PostAsync("/relationships", new StringContent(json, Encoding.UTF8, "application/json"));
 
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
         var problem = await response.Content.ReadFromJsonAsync<ValidationProblemDetails>();
         Assert.That(problem!.Errors, Contains.Key("SourceNodeId"));
+    }
+
+    [Test]
+    public async Task Create_WithInvalidRelationshipTypeId_Returns400WithValidationErrors()
+    {
+        var json = "{\"sourceNodeId\":\"" + Guid.NewGuid() + "\",\"relationshipTypeId\":\"not-a-guid\",\"targetNodeId\":\"" + Guid.NewGuid() + "\"}";
+
+        var response = await _client.PostAsync("/relationships", new StringContent(json, Encoding.UTF8, "application/json"));
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+        var problem = await response.Content.ReadFromJsonAsync<ValidationProblemDetails>();
+        Assert.That(problem!.Errors, Contains.Key("$.relationshipTypeId"));
+    }
+
+    [Test]
+    public async Task Create_WithMissingRelationshipTypeId_Returns400WithValidationErrors()
+    {
+        var json = "{\"sourceNodeId\":\"" + Guid.NewGuid() + "\",\"targetNodeId\":\"" + Guid.NewGuid() + "\"}";
+
+        var response = await _client.PostAsync("/relationships", new StringContent(json, Encoding.UTF8, "application/json"));
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+        var problem = await response.Content.ReadFromJsonAsync<ValidationProblemDetails>();
+        Assert.That(problem!.Errors, Contains.Key("RelationshipTypeId"));
+    }
+
+    [Test]
+    public async Task Create_WithInvalidTargetNodeId_Returns400WithValidationErrors()
+    {
+        var json = "{\"sourceNodeId\":\"" + Guid.NewGuid() + "\",\"relationshipTypeId\":\"" + Guid.NewGuid() + "\",\"targetNodeId\":\"not-a-guid\"}";
+
+        var response = await _client.PostAsync("/relationships", new StringContent(json, Encoding.UTF8, "application/json"));
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+        var problem = await response.Content.ReadFromJsonAsync<ValidationProblemDetails>();
+        Assert.That(problem!.Errors, Contains.Key("$.targetNodeId"));
+    }
+
+    [Test]
+    public async Task Create_WithMissingTargetNodeId_Returns400WithValidationErrors()
+    {
+        var json = "{\"sourceNodeId\":\"" + Guid.NewGuid() + "\",\"relationshipTypeId\":\"" + Guid.NewGuid() + "\"}";
+
+        var response = await _client.PostAsync("/relationships", new StringContent(json, Encoding.UTF8, "application/json"));
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+        var problem = await response.Content.ReadFromJsonAsync<ValidationProblemDetails>();
+        Assert.That(problem!.Errors, Contains.Key("TargetNodeId"));
     }
 
     [Test]

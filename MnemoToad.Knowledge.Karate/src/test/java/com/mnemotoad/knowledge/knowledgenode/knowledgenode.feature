@@ -51,9 +51,15 @@ Feature: KnowledgeNode API
     When method post
     Then status 400
 
-  Scenario: Reject creation with missing node type id
+  Scenario: Reject creation with an invalid node type id
     Given path 'nodes'
-    And request { nodeTypeId: '00000000-0000-0000-0000-000000000000', canonicalName: '#(uniqueName("KnowledgeNode"))' }
+    And request { nodeTypeId: 'not-a-guid', canonicalName: '#(uniqueName("KnowledgeNode"))' }
+    When method post
+    Then status 400
+
+  Scenario: Reject creation with a missing node type id
+    Given path 'nodes'
+    And request { canonicalName: '#(uniqueName("KnowledgeNode"))' }
     When method post
     Then status 400
 

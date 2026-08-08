@@ -38,30 +38,57 @@ Feature: KnowledgeRelation API
     And match response.id == '#uuid'
     * eval knowledgeRelationFixtures.stageForCleanup(response.id)
 
-  Scenario: Reject creation with missing source node id
+  Scenario: Reject creation with an invalid source node id
     * def nodeType = createNodeType()
     * def targetNode = createKnowledgeNode({ nodeTypeId: nodeType.response.id })
     * def relationshipType = createRelationshipType()
     Given path 'relationships'
-    And request { sourceNodeId: '00000000-0000-0000-0000-000000000000', relationshipTypeId: '#(relationshipType.response.id)', targetNodeId: '#(targetNode.response.id)' }
+    And request { sourceNodeId: 'not-a-guid', relationshipTypeId: '#(relationshipType.response.id)', targetNodeId: '#(targetNode.response.id)' }
     When method post
     Then status 400
 
-  Scenario: Reject creation with missing relationship type id
+  Scenario: Reject creation with a missing source node id
+    * def nodeType = createNodeType()
+    * def targetNode = createKnowledgeNode({ nodeTypeId: nodeType.response.id })
+    * def relationshipType = createRelationshipType()
+    Given path 'relationships'
+    And request { relationshipTypeId: '#(relationshipType.response.id)', targetNodeId: '#(targetNode.response.id)' }
+    When method post
+    Then status 400
+
+  Scenario: Reject creation with an invalid relationship type id
     * def nodeType = createNodeType()
     * def sourceNode = createKnowledgeNode({ nodeTypeId: nodeType.response.id })
     * def targetNode = createKnowledgeNode({ nodeTypeId: nodeType.response.id })
     Given path 'relationships'
-    And request { sourceNodeId: '#(sourceNode.response.id)', relationshipTypeId: '00000000-0000-0000-0000-000000000000', targetNodeId: '#(targetNode.response.id)' }
+    And request { sourceNodeId: '#(sourceNode.response.id)', relationshipTypeId: 'not-a-guid', targetNodeId: '#(targetNode.response.id)' }
     When method post
     Then status 400
 
-  Scenario: Reject creation with missing target node id
+  Scenario: Reject creation with a missing relationship type id
+    * def nodeType = createNodeType()
+    * def sourceNode = createKnowledgeNode({ nodeTypeId: nodeType.response.id })
+    * def targetNode = createKnowledgeNode({ nodeTypeId: nodeType.response.id })
+    Given path 'relationships'
+    And request { sourceNodeId: '#(sourceNode.response.id)', targetNodeId: '#(targetNode.response.id)' }
+    When method post
+    Then status 400
+
+  Scenario: Reject creation with an invalid target node id
     * def nodeType = createNodeType()
     * def sourceNode = createKnowledgeNode({ nodeTypeId: nodeType.response.id })
     * def relationshipType = createRelationshipType()
     Given path 'relationships'
-    And request { sourceNodeId: '#(sourceNode.response.id)', relationshipTypeId: '#(relationshipType.response.id)', targetNodeId: '00000000-0000-0000-0000-000000000000' }
+    And request { sourceNodeId: '#(sourceNode.response.id)', relationshipTypeId: '#(relationshipType.response.id)', targetNodeId: 'not-a-guid' }
+    When method post
+    Then status 400
+
+  Scenario: Reject creation with a missing target node id
+    * def nodeType = createNodeType()
+    * def sourceNode = createKnowledgeNode({ nodeTypeId: nodeType.response.id })
+    * def relationshipType = createRelationshipType()
+    Given path 'relationships'
+    And request { sourceNodeId: '#(sourceNode.response.id)', relationshipTypeId: '#(relationshipType.response.id)' }
     When method post
     Then status 400
 
